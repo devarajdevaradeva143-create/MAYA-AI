@@ -11,6 +11,7 @@ Maya AI notes and guides.
 | `BIOMETRICS.md` | Windows Hello face, voice phrase/voiceprint, session lock |
 | `DEVICES.md` | trusted pairing + HMAC-signed sync bundles |
 | `ROADMAP.md` | 13-phase build tracker and exit criteria |
+| `BUILD.md` (root) | full build guide — Windows, mobile, engine, packaging, troubleshooting |
 | `HANDOFF.md` | current state, environment, pending work for the next AI |
 | `PENDING.md` (root) | consolidated pending list for the whole project |
 | `WINDOWS-APP.md` | Windows desktop app features, run, test, build, security model |
