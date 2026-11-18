@@ -12,6 +12,7 @@ Maya AI notes and guides.
 | `DEVICES.md` | trusted pairing + HMAC-signed sync bundles |
 | `ROADMAP.md` | 13-phase build tracker and exit criteria |
 | `BUILD.md` (root) | full build guide — Windows, mobile, engine, packaging, troubleshooting |
+| `SETUP.md` (root) | full setup guide — install, first-run, config, pairing, verify |
 | `HANDOFF.md` | current state, environment, pending work for the next AI |
 | `PENDING.md` (root) | consolidated pending list for the whole project |
 | `WINDOWS-APP.md` | Windows desktop app features, run, test, build, security model |
