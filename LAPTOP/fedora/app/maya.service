@@ -1,0 +1,22 @@
+[Unit]
+Description=Maya AI — local assistant background monitor
+Documentation=file://%h/Desktop/MAYA%20AI%20PROJECT/docs/ENGINE-SETUP.md
+After=graphical-session.target
+Wants=graphical-session.target
+
+[Service]
+Type=simple
+# %h = user home. Change the two paths below if the project lives elsewhere.
+WorkingDirectory=%h/Desktop/MAYA AI PROJECT/JARVIS
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONIOENCODING=utf-8
+# Uses the project venv (created by `uv sync`), not the system Python.
+ExecStart=%h/Desktop/MAYA AI PROJECT/JARVIS/.venv/bin/python -m custom.cli monitor start
+Restart=on-failure
+RestartSec=10
+# Local-only assistant: no network sandboxing needed, but keep it unprivileged.
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target

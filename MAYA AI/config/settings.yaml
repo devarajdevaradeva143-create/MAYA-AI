@@ -1,0 +1,208 @@
+# Maya AI — Common Settings (Windows + Fedora)
+
+# mode: offline | online
+mode: offline
+
+# hardware: auto | cpu | gpu | npu
+hardware: auto
+
+# language: tamil | english | tanglish
+language: tanglish
+
+# behaviour — command only
+behaviour:
+  mode: command_only   # owner solluratha mattum sei
+  autonomous: false    # thana ethuvum pannaadhu
+
+# runtime — background
+runtime:
+  background: true     # background-la run aagum
+  autostart: true      # login-la start aagum
+
+# wake up
+wake:
+  enabled: true
+  name: Maya
+  name_repeat: 3       # "Maya" 3 times
+  clap_count: 3        # 3 clap
+  reply: "Sollu da, enna venum?"
+
+# persona
+persona: persona/girlfriend.md
+
+# model
+model: qwen3-3b
+mode_model: 3b
+
+# engine — inference backend (lemonade / openjarvis). Code reads this; never hardcode.
+engine:
+  mode: direct          # direct | openjarvis
+  type: lemonade        # lemonade | ollama (not installed)
+  host: http://localhost:13305
+  model: qwen3.5-2b-FLM
+  fallback_model: qwen3-it-4b-FLM
+  timeout: 30           # seconds
+  temperature: 0.7
+  max_tokens: 512
+
+# web — offline AI public info mattum edukkalam
+web:
+  search: ask                       # permission sonna mattum
+  allowed_topics:
+  - news
+  - world news
+  - ai
+  - it
+  - technology
+
+# memory — separate for offline / online
+memory:
+  offline: memory/offline
+  online: memory/online
+
+# knowledge — local RAG (offline). BM25 always works; embeddings are optional.
+knowledge:
+  embedding_model: minishlab/potion-base-32M   # cached in MAYA AI/Model/hf
+  # Tamil-heavy queries? swap for a multilingual model (~512 MB download):
+  # embedding_model: minishlab/potion-multilingual-128M
+
+# devices — trusted pairing + signed sync bundles (local only, no network)
+devices:
+  bundle:
+    max_files: 200        # files per bundle
+    max_mb: 25            # total uncompressed size
+  # Bundles are HMAC-signed, NOT encrypted. Move them over USB / local share.
+
+# data flow — one way only
+flow:
+  online_to_offline: true    # online → offline OK
+  offline_to_online: false   # offline → online NEVER
+
+# privacy
+privacy:
+  personal_details_online: false   # DEVARAJ\details.md never leaves laptop
+  send_personal_details: false     # no personal data in any request
+  offline_memory_online: false     # offline memory never shared with online AI
+  biometrics_local_only: true      # face / voice data laptop-la mattum
+
+# offline AI — full PC permission (with confirmation)
+permissions:
+  offline_ai: full
+  read: allow        # files read — allowed
+  edit: ask          # edit — ask owner
+  delete: ask        # delete — ask owner
+  important: ask     # important actions — ask owner
+  shell: ask         # commands / apps — ask owner
+  # Phone / PC-control file access — these roots mattum (absolute paths)
+  allowed_roots:
+  - "C:\\Users\\devar\\Desktop\\MAYA AI PROJECT"
+  - "C:\\Users\\devar\\Desktop"
+  - "C:\\Users\\devar\\Documents"
+  - "C:\\Users\\devar\\Downloads"
+
+# 11 modules
+features:
+  chat: true
+  voice: partial          # English works; Tamil TTS/STT pending
+  pc_control: true
+  mobile_control: plan    # plan ready — appuram
+  english_teacher: true
+  identity_security: true      # PIN + face/voice + lock + session watchdog
+  system_monitoring: true
+  personal_assistant: partial  # todos/reminders; calendar basics
+  knowledge_ai: true
+  language_intelligence: partial  # detect/pronunciation; translations stub
+  multi_device: partial    # pairing + signed bundles; live transport pending
+  extra_features: design   # OCR, briefing, focus, expense, media, cleanup, etc.
+
+english_teacher:
+  tab: true               # thani tab
+  chat_command: true      # "Maya, English teach pannu"
+
+# security — confirm pannanum
+security:
+  mode: adaptive          # adaptive | face | voice | pin | face+voice+pin
+  methods:
+  - face
+  - voice
+  - pin
+  biometrics_local_only: true
+  unauthorized_alert: true
+  # biometrics — all local. PIN stays the fallback.
+  biometrics:
+    face: windows_hello        # MAYA.exe helper in MAYA AI/security/bin
+    voice:
+      enabled: true
+      require_speaker: true    # false = spoken phrase only (weaker)
+      speaker_model: vosk-spk  # folder under voice.stt.model_root
+      speaker_threshold: 0.65  # cosine similarity; raise for stricter
+      samples: 3               # enrollment samples
+      max_attempts: 5          # then a timed lockout
+
+  # session watchdog — `maya security watchdog` (never auto-starts)
+  watchdog:
+    idle_lock_minutes: 5       # lock after N min without keyboard/mouse (0 = off)
+    max_session_minutes: 0     # lock N min after unlock (0 = off)
+    voice_check_minutes: 0     # periodic voice re-check (0 = off; needs enrollment)
+    check_seconds: 15          # how often to evaluate
+    voice_seconds: 5           # microphone seconds per voice check
+
+# voice — ellame offline (Piper / Windows SAPI / Vosk)
+voice:
+  tts:
+    engine: auto            # auto | piper | sapi
+    preferred_voices:       # Windows SAPI names, first match wins
+    - heera
+    - neerja
+    - zira
+    - hazel
+    volume: 100             # 0-100 SAPI volume
+  stt:
+    engine: vosk            # vosk = offline models below
+    model_root: MAYA AI/Model/models
+    models:
+      en: vosk-en           # English (US) small
+      en-in: vosk-en-in     # Indian English small
+      ta: vosk-ta           # official Vosk has no Tamil model
+  clap:
+    threshold: 2800         # mic peak cutoff (calibrate if unsure)
+    count: 3                # claps needed
+    min_gap: 0.12           # seconds between claps
+    max_gap: 0.9
+    window: 3.0             # all claps must fit in this window
+    cooldown: 8.0           # retrigger guard
+
+# cloud — Gemini. SEPARATE command only: maya-cloud. Offline memory is never sent.
+cloud:
+  enabled: true             # false = maya-cloud refuses to send anything
+  provider: gemini
+  model: gemini-3.5-flash
+  endpoint: https://generativelanguage.googleapis.com/v1beta
+  timeout: 60
+  temperature: 0.7
+  max_tokens: 1024
+  require_confirmation: true
+
+# phone server — LAN only, no cloud relay
+server:
+  enabled: true
+  host: 0.0.0.0          # LAN bind
+  port: 8420
+  lan_only: true         # reject public source IPs
+  token_ttl_hours: 720   # 30 days
+  pin_ttl_seconds: 120
+  qr_ttl_seconds: 120
+  max_pair_attempts: 5
+  lockout_minutes: 10
+  max_devices: 8
+
+# desktop UI
+  auto_start: false
+ui:
+  theme: system          # dark | light | system
+  window_width: 1180
+  window_height: 760
+  minimize_to_tray: true
+  close_to_tray: true
+  start_minimized: false
+  confirm_destructive: true

@@ -1,0 +1,43 @@
+"""GET /health — unauthenticated discovery endpoint."""
+
+from __future__ import annotations
+
+import time
+
+from fastapi import APIRouter, Request
+
+from custom.server.models import API_VERSION, HealthResponse
+
+router = APIRouter(tags=["health"])
+
+CAPABILITIES = [
+    "chat",
+    "chat_stream",
+    "voice_stt",
+    "voice_tts",
+    "pc_control",
+    "wake",
+    "monitor",
+]
+
+
+@router.get("/health", response_model=HealthResponse)
+def health(request: Request) -> HealthResponse:
+    state = request.app.state
+    services = state.services
+    try:
+        paired = state.tokens.count_active()
+    except Exception:  # noqa: BLE001 - health must never fail on the store
+        paired = 0
+    return HealthResponse(
+        status="ok",
+        app="maya-laptop",
+        version=services.version,
+        api=API_VERSION,
+        platform=services.platform,
+        model=services.model,
+        engine=services.engine_name,
+        capabilities=CAPABILITIES,
+        paired_devices=paired,
+        uptime_s=max(0, int(time.time() - services.started_at)),
+    )

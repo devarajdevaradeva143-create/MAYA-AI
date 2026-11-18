@@ -1,0 +1,60 @@
+# Secrets — never commit
+.env
+*.env
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.venv-engine/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Local runtime data (personal)
+MAYA AI/logs/
+MAYA AI/memory/
+MAYA AI/security/*.json
+DEVARAJ/
+.opencode/
+
+# Heavy / generated binaries (not source)
+MAYA AI/Model/
+MAYA AI/voice/*.onnx
+MAYA AI/voice/*.onnx.json
+*.gguf
+*.safetensors
+*.bin
+*.pt
+*.pth
+*.apk
+*.aab
+*.aar
+
+# Build artifacts
+LAPTOP/windows/build/
+LAPTOP/windows/dist/
+MOBILE APP/app/build/
+MOBILE APP/.gradle/
+MOBILE APP/.idea/
+MOBILE APP/.kotlin/
+MOBILE APP/local.properties
+MOBILE APP/app/.cxx/
+
+# Nested git repo (OpenJarvis — read-only, its own repo)
+JARVIS/OpenJarvis/
+
+# Python venvs / wheels
+JARVIS/.venv/
+JARVIS/.venv-engine/
+JARVIS/wheels/
+
+# Root-level scratch logs
+logs*.txt
+
+# Runtime settings backups (personal)
+MAYA AI/config/backups/
+
+# Vendored git repo (llama.cpp) — keep submodule-free
+MOBILE APP/app/src/main/cpp/llama.cpp/
+">

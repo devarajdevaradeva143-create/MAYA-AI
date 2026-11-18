@@ -1,0 +1,36 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "maya-custom"
+version = "0.1.0"
+description = "Maya AI — custom local assistant code (OpenJarvis stays read-only)."
+readme = "custom/README.md"
+# Same interpreter range as JARVIS/OpenJarvis/pyproject.toml so the custom
+# package and the engine share ONE interpreter (3.13 via .python-version).
+requires-python = ">=3.10,<3.14"
+dependencies = [
+    "click",
+    "pyyaml",
+    "psutil",
+    "pypdf",
+    "httpx",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+# Semantic RAG only. Without it Maya falls back to BM25 — nothing breaks.
+semantic = ["model2vec>=0.10"]
+
+[project.scripts]
+maya = "custom.cli:main"
+maya-cloud = "custom.cloud_cli:main"
+
+# Only our own package — never OpenJarvis (that has its own pyproject.toml).
+[tool.hatch.build.targets.wheel]
+packages = ["custom"]
+
+[tool.pytest.ini_options]
+testpaths = ["custom/tests"]
+pythonpath = ["."]
