@@ -161,6 +161,18 @@ Error message = English, user-safe. Stack trace / path ellam client-ku anuppaadh
 | POST | `/pc/command` | ✅ | Laptop action request |
 | POST | `/pc/confirm` | ✅ | Execute confirmed action |
 | POST | `/pc/cancel` | ✅ | Discard pending action |
+| POST | `/pc/remote/start` | ✅ | Confirm + open a remote-control session |
+| POST | `/pc/remote/stop` | ✅ | Close the remote-control session |
+| GET | `/pc/remote/status` | ✅ | Session state |
+| GET | `/pc/screen` | ✅ + session | Live screen frame (JPEG/PNG) |
+| POST | `/pc/input` | ✅ + session | Mouse / keyboard events |
+| GET | `/pc/files/roots` | ✅ + session | Allowed folders |
+| GET | `/pc/files/list` | ✅ + session | Folder listing |
+| GET | `/pc/files/download` | ✅ + session | File download (binary) |
+| PUT | `/pc/files/upload` | ✅ + session | File upload (raw body) |
+| GET | `/hybrid/status` | ✅ | HYBRID controller + AI tasks |
+| POST | `/hybrid/takeover` | ✅ | User takes control (AI yields) |
+| POST | `/hybrid/release` | ✅ | Release user control |
 | GET | `/wake/status` | ✅ | Wake listener state |
 | POST | `/wake/listen` | ✅ | Start 60 s wake listen |
 | POST | `/wake/stop` | ✅ | Stop wake listen |
@@ -189,8 +201,12 @@ No auth. Personal data illa.
     "voice_stt",
     "voice_tts",
     "pc_control",
+    "file_transfer",
     "wake",
-    "monitor"
+    "monitor",
+    "screen",
+    "remote_input",
+    "hybrid"
   ],
   "paired_devices": 1,
   "uptime_s": 360
@@ -525,6 +541,150 @@ Rate limit: 30 PC commands / min per device.
 
 ---
 
+## 9A. Remote control (REMOTE / HYBRID mode)
+
+A **remote session** is a short-lived capability token created only after the
+owner confirms on the phone. It gates screen view, input, and file transfer so
+the normal `/pc/command` confirmation is not repeated for every mouse event.
+The session dies after **5 minutes of inactivity**, on `remote/stop`, or on
+server restart.
+
+### `POST /pc/remote/start`
+
+First call (no token) → permission prompt:
+
+```json
+{
+  "status": "needs_confirmation",
+  "confirm_token": "cf_xxxxxxxx",
+  "description": "Allow remote screen and input from this phone?",
+  "expires_in": 60
+}
+```
+
+Second call with `{"confirm_token": "cf_xxxxxxxx"}`:
+
+```json
+{
+  "status": "done",
+  "session_token": "s_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "expires_in": 300
+}
+```
+
+### `POST /pc/remote/stop`
+
+```json
+{ "session_token": "s_..." }
+```
+
+`{ "status": "done", "active": false, "expires_in": 0 }` — idempotent.
+Only a valid session token for the calling device releases HYBRID control.
+
+Only **one** remote session exists at a time: starting one on any paired device
+drops the previous session.
+
+### `GET /pc/remote/status?session_token=...`
+
+```json
+{ "active": true, "expires_in": 287 }
+```
+
+### `GET /pc/screen?session_token=...&max_width=1280&quality=60`
+
+Returns `image/jpeg` binary. `max_width` 320–1920, `quality` 30–85.
+`X-Maya-Width` / `X-Maya-Height` headers carry the real frame size.
+Poll at most **2 fps**. No auth token + session → `4002`.
+
+### `POST /pc/input`
+
+```json
+{
+  "session_token": "s_...",
+  "events": [
+    { "type": "move", "x": 0.42, "y": 0.73 },
+    { "type": "click", "button": "left" },
+    { "type": "scroll", "dy": -3 },
+    { "type": "text", "text": "hello" },
+    { "type": "key", "key": "enter" }
+  ]
+}
+```
+
+- `x`, `y` are **normalized 0.0–1.0** (phone maps the displayed image).
+- 1–32 events per call. `text` max 500 chars. `dy` −10..10.
+- `button`: `left`, `right`, `middle`.
+- `key` allowlist: `enter`, `tab`, `esc`, `backspace`, `delete`, `space`,
+  `up`, `down`, `left`, `right`, `home`, `end`, `pageup`, `pagedown`,
+  `ctrl+a`, `ctrl+c`, `ctrl+v`, `ctrl+x`, `ctrl+z`, `alt+tab`, `f5`.
+- Response `{ "status": "done", "applied": 2 }`.
+- Rate limit: 600 events-requests / min per device (client throttles ~10/s).
+
+### `GET /pc/files/roots`
+
+```json
+{ "roots": ["C:\\Users\\devar\\Desktop"] }
+```
+
+### `GET /pc/files/list?session_token=...&path=C:\\Users\\...`
+
+```json
+{
+  "path": "C:\\Users\\devar\\Desktop",
+  "entries": [
+    { "name": "notes", "path": "C:\\Users\\devar\\Desktop\\notes", "is_dir": true, "size": null },
+    { "name": "todo.txt", "path": "C:\\Users\\devar\\Desktop\\todo.txt", "is_dir": false, "size": 412 }
+  ]
+}
+```
+
+### `GET /pc/files/download?session_token=...&path=...`
+
+Binary stream, `Content-Disposition: attachment`, 50 MB cap, allowed roots
+only. System folders denied.
+
+### `PUT /pc/files/upload?session_token=...&path=...`
+
+Raw request body (not multipart). 25 MB cap. Parent folder must already exist
+and be inside an allowed root. Existing file is replaced atomically.
+
+```json
+{ "status": "done", "path": "C:\\...\\todo.txt", "size": 412 }
+```
+
+---
+
+## 9B. HYBRID mode
+
+HYBRID mode guarantees **user > AI**: a user takeover instantly pauses/cancels
+AI work, and AI cannot acquire control while the user holds it.
+
+### `GET /hybrid/status`
+
+```json
+{
+  "controller": "user",
+  "ai_busy": false,
+  "queued_tasks": 1,
+  "running_task": null,
+  "conflicts": 2,
+  "last_takeover": 1760100000,
+  "uptime_s": 420,
+  "tasks": [
+    { "id": "t_ab12cd34", "description": "Summarise notes", "status": "queued" }
+  ]
+}
+```
+
+### `POST /hybrid/takeover` → `{ "status": "done", "controller": "user" }`
+
+### `POST /hybrid/release` → `{ "status": "done", "controller": "none" }`
+
+Starting a remote session auto-takes over (`controller=user`); stopping it
+releases control. AI task execution itself stays on the laptop.
+
+---
+
 ## 10. Events WebSocket
 
 ### `WS /ws/events?token=<token>`
@@ -575,6 +735,9 @@ Rules:
 | `/chat` | 20 / min | – |
 | `/voice/stt` | 10 / min | – |
 | `/pc/command` | 30 / min | – |
+| `/pc/screen` | 120 / min | – |
+| `/pc/input` | 600 / min | – |
+| `/pc/files/*` | 120 / min | – |
 | `/wake/listen` | 5 / min | – |
 
 Exceed → `429 / 1005`.
@@ -623,6 +786,8 @@ JARVIS\custom\server\
 │  ├─ chat.py
 │  ├─ voice.py
 │  ├─ pc.py
+│  ├─ remote.py       ← remote session + screen + input + files
+│  ├─ hybrid.py       ← HYBRID control bus
 │  ├─ wake.py
 │  └─ events.py
 └─ ws.py
@@ -655,6 +820,8 @@ data\remote\
 - [ ] Revoked device → immediate 401
 - [ ] Private IP guard
 - [ ] Confirm token single-use + TTL
+- [ ] Remote session confirm + device-bound + 5 min sliding TTL
+- [ ] Screen/input/files all require the live session
 - [ ] Path traversal + symlink guard
 - [ ] Command denylist
 - [ ] Rate limits
@@ -671,3 +838,4 @@ data\remote\
 | Version | Date | Change |
 |---|---|---|
 | v1 | 2026-11-17 | Initial contract — pairing, chat, voice, PC control, events, wake |
+| v1.1 | 2026-11-19 | Additive: remote session + screen + input + file transfer + hybrid status/takeover |

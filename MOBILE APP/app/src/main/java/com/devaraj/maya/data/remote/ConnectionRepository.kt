@@ -44,18 +44,19 @@ class ConnectionRepository(
     }
 
     /** Health check with the 2 s startup budget (plan §14.2). */
-    suspend fun connect(device: Device): ConnectionState {
+    suspend fun connect(device: Device, hostOverride: String? = null): ConnectionState {
         if (tokenStore.load(device.id).isNullOrBlank()) {
             _state.value = ConnectionState.NeedsPairing
             return ConnectionState.NeedsPairing
         }
         _state.value = ConnectionState.Checking
+        val host = hostOverride?.takeIf { it.isNotBlank() } ?: device.host
         val result = try {
-            val health = apiFactory(device.host, device.port, true).health()
-            val touched = device.copy(lastSeen = now())
+            val health = apiFactory(host, device.port, true).health()
+            val touched = device.copy(host = host, lastSeen = now())
             deviceDao.touch(device.id, touched.lastSeen)
             session.activeDeviceId = device.id
-            session.host = device.host
+            session.host = host
             session.port = device.port
             ConnectionState.Connected(touched, health)
         } catch (error: Exception) {
@@ -79,11 +80,12 @@ class ConnectionRepository(
     /** Auto-connect: 3 tries with 2 s / 5 s / 10 s backoff (plan §14.2). */
     suspend fun connectWithRetry(
         device: Device,
+        hostOverride: String? = null,
         delaysMillis: List<Long> = listOf(2_000, 5_000, 10_000),
     ): ConnectionState {
         var attempt = 0
         while (true) {
-            val result = connect(device)
+            val result = connect(device, hostOverride)
             val retryable = result is ConnectionState.Failed &&
                 (result.reason == MayaErrorReason.NO_CONNECTION ||
                     result.reason == MayaErrorReason.TIMEOUT)

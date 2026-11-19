@@ -61,6 +61,20 @@ cd "LAPTOP\windows"
 .\.venv\Scripts\ruff.exe check app tests
 ```
 
+## Requirements / Modes (from `docs\REQUIREMENTS.md`)
+
+Windows app must support (parity target):
+- **AI MODE** — voice + text commands, open/close apps, file/folder creation, code write/run, file management, permission-gated actions.
+- **REMOTE MODE** — live screen view, mouse + keyboard control, app open/close, file view/transfer, remote control over Wi-Fi/Hotspot/Internet, Bluetooth nearby device contact.
+- **HYBRID MODE** — direct user control + AI autonomous work simultaneously; no control conflicts; user takeover on demand.
+
+### Mode status (Windows)
+- AI MODE: ✅ Partial (chat, voice, PC control, monitoring, teacher, security, settings).
+- REMOTE MODE: ⚠️ Partial (phone server + screen share + PC actions).
+- HYBRID MODE: ❌ Not started.
+- Connection Manager: ⚠️ Partial (phone server). Shared module: `JARVIS\custom\tools\connection_manager.py`.
+- Dual-boot awareness: ⚠️ Partial (server advertises OS).
+
 ## Existing files (keep)
 
 - `app\maya_tray.py` — legacy tray (fallback)

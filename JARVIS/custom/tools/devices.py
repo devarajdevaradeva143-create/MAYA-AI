@@ -9,7 +9,7 @@ Personal details device-ku device poagadhu 🔒
 
 import sys
 import os
-import socket
+
 import subprocess
 from typing import List, Dict, Any, Optional
 from pathlib import Path
@@ -29,12 +29,14 @@ from ..config import PROJECT_ROOT, load_settings
 
 
 ENV_DEVICES_STORE = "MAYA_DEVICES_STORE"
+ENV_BUNDLE_NONCES = "MAYA_BUNDLE_NONCES"
 STORE_FILENAME = "devices.json"
 DEFAULT_OFFLINE_MEMORY = "memory/offline"
 CODE_ITERATIONS = 600_000
 BUNDLE_ITERATIONS = 600_000
 BUNDLE_FORMAT = "maya-device-bundle"
 BUNDLE_VERSION = 1
+BUNDLE_NONCE_TTL_S = 30 * 24 * 60 * 60
 MIN_CODE_LEN = 16
 MAX_CODE_LEN = 256
 MAX_NAME_LEN = 32
@@ -539,6 +541,60 @@ def _touch_device(name: str) -> None:
             pass
 
 
+# ── Bundle nonce ledger (anti-replay) ─────────────────────────────────────
+
+def _nonces_store_path() -> Path:
+    override = os.environ.get(ENV_BUNDLE_NONCES, "").strip()
+    if override:
+        return Path(override).expanduser()
+    memory = _settings().get("memory", {})
+    offline = memory.get("offline", DEFAULT_OFFLINE_MEMORY) if isinstance(memory, dict) else DEFAULT_OFFLINE_MEMORY
+    dir_path = Path(str(offline))
+    if not dir_path.is_absolute():
+        dir_path = PROJECT_ROOT / "MAYA AI" / dir_path
+    return dir_path / "bundle_nonces.json"
+
+
+def _load_nonces() -> dict[str, Any]:
+    path = _nonces_store_path()
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (FileNotFoundError, json.JSONDecodeError, OSError, ValueError):
+        return {"version": 1, "seen": {}}
+    if not isinstance(data, dict) or not isinstance(data.get("seen"), dict):
+        return {"version": 1, "seen": {}}
+    return {"version": 1, "seen": data["seen"]}
+
+
+def _prune_nonces(data: dict[str, Any]) -> dict[str, Any]:
+    seen = data.get("seen", {})
+    if not isinstance(seen, dict):
+        seen = {}
+    now = time.time()
+    pruned = {k: v for k, v in seen.items() if isinstance(v, (int, float)) and (now - float(v)) < BUNDLE_NONCE_TTL_S}
+    return {"version": 1, "seen": pruned}
+
+
+def _save_nonces(data: dict[str, Any]) -> None:
+    path = _nonces_store_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    pruned = _prune_nonces(data)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    try:
+        with tmp.open("w", encoding="utf-8") as handle:
+            json.dump(pruned, handle, ensure_ascii=False, indent=2)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.chmod(tmp, 0o600)
+        os.replace(tmp, path)
+    except OSError:
+        try:
+            tmp.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
 # ── Signed sync bundles ───────────────────────────────────────────────────
 
 def _bundle_limits() -> tuple[int, int]:
@@ -772,6 +828,7 @@ def export_bundle(
     fields: Dict[str, Any] = {
         "format": BUNDLE_FORMAT,
         "version": BUNDLE_VERSION,
+        "nonce": secrets.token_hex(16),
         "device": record["name"],
         "created": int(time.time()),
         "kdf": {
@@ -824,6 +881,7 @@ def import_bundle(
     dest_dir: str,
     code: str,
     overwrite: bool = False,
+    allow_replay: bool = False,
 ) -> Dict[str, Any]:
     """Verify a signed bundle and extract it under ``dest_dir``.
 
@@ -892,6 +950,19 @@ def import_bundle(
                 "created before the device was re-paired with a new code)."
             ),
         }
+
+    # ── Anti-replay (nonce) ─────────────────────────────────────────────
+    nonce = bundle.get("nonce")
+    if isinstance(nonce, str) and nonce.strip():
+        nonce = nonce.strip()
+        ledger = _load_nonces()
+        seen = ledger.get("seen", {})
+        if isinstance(seen, dict) and nonce in seen and not allow_replay:
+            return {
+                "ok": False,
+                "code": "replay",
+                "error": "This bundle was already imported. Re-export a fresh bundle to import again.",
+            }
 
     files = bundle.get("files")
     if not isinstance(files, list) or not files:
@@ -1023,6 +1094,20 @@ def import_bundle(
         shutil.rmtree(staging, ignore_errors=True)
 
     _touch_device(record["name"])
+
+    # Record the nonce only after a fully successful import.
+    nonce = bundle.get("nonce")
+    if isinstance(nonce, str) and nonce.strip():
+        ledger = _load_nonces()
+        seen = ledger.get("seen", {})
+        if not isinstance(seen, dict):
+            seen = {}
+        seen[nonce.strip()] = time.time()
+        try:
+            _save_nonces({"version": 1, "seen": seen})
+        except OSError:
+            pass
+
     return {
         "ok": True,
         "device": record["name"],

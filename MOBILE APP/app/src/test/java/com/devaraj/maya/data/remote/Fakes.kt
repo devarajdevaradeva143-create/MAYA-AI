@@ -6,6 +6,8 @@ import com.devaraj.maya.data.secure.TokenStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
+import okhttp3.RequestBody
+import okhttp3.ResponseBody
 
 class FakeTokenStore : TokenStore {
     private val tokens = mutableMapOf<String, String>()
@@ -101,4 +103,40 @@ open class FakeMayaApi : MayaApi {
 
     override suspend fun wakeStop(): WakeStopResponse =
         throw UnsupportedOperationException("wakeStop not stubbed")
+
+    override suspend fun remoteStart(body: RemoteConfirmRequest): RemoteStartResponse =
+        throw UnsupportedOperationException("remoteStart not stubbed")
+
+    override suspend fun remoteStop(body: RemoteStopRequest): RemoteSessionDto =
+        throw UnsupportedOperationException("remoteStop not stubbed")
+
+    override suspend fun remoteStatus(sessionToken: String): RemoteStatusDto =
+        throw UnsupportedOperationException("remoteStatus not stubbed")
+
+    override suspend fun screen(sessionToken: String, maxWidth: Int, quality: Int): okhttp3.ResponseBody =
+        throw UnsupportedOperationException("screen not stubbed")
+
+    override suspend fun input(body: InputRequest): InputResponse =
+        throw UnsupportedOperationException("input not stubbed")
+
+    override suspend fun fileRoots(sessionToken: String): FileRootsDto =
+        throw UnsupportedOperationException("fileRoots not stubbed")
+
+    override suspend fun fileList(sessionToken: String, path: String): FileListDto =
+        throw UnsupportedOperationException("fileList not stubbed")
+
+    override suspend fun fileDownload(sessionToken: String, path: String): okhttp3.ResponseBody =
+        throw UnsupportedOperationException("fileDownload not stubbed")
+
+    override suspend fun fileUpload(sessionToken: String, path: String, body: okhttp3.RequestBody): FileUploadDto =
+        throw UnsupportedOperationException("fileUpload not stubbed")
+
+    override suspend fun hybridStatus(): HybridStatusDto =
+        throw UnsupportedOperationException("hybridStatus not stubbed")
+
+    override suspend fun hybridTakeover(): HybridStatusDto =
+        throw UnsupportedOperationException("hybridTakeover not stubbed")
+
+    override suspend fun hybridRelease(): HybridStatusDto =
+        throw UnsupportedOperationException("hybridRelease not stubbed")
 }

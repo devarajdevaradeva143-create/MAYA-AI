@@ -25,6 +25,7 @@ from app.logging_setup import setup_server_logging
 from app.services.control_service import ControlService
 from app.services.engine_service import EngineAdapter
 from app.services.monitor_service import MonitorAdapter
+from app.services.remote_service import HybridAdapter, InputAdapter, ScreenAdapter
 from app.services.voice_service import VoiceAdapter
 from app.services.wake_service import WakeAdapter
 
@@ -126,6 +127,9 @@ def build_services(
     pc: Any | None = None,
     monitor: Any | None = None,
     wake: Any | None = None,
+    screen: Any | None = None,
+    input_adapter: Any | None = None,
+    hybrid: Any | None = None,
 ) -> ServerServices:
     """Wire real adapters (tests can inject fakes)."""
     data = load_raw_settings() if raw_settings is None else raw_settings
@@ -136,6 +140,9 @@ def build_services(
     pc = pc or ControlService()
     monitor = monitor or MonitorAdapter()
     wake = wake or WakeAdapter()
+    screen = screen or ScreenAdapter()
+    input_adapter = input_adapter or InputAdapter()
+    hybrid = hybrid or HybridAdapter()
 
     from custom.persona.loader import load_persona
 
@@ -154,6 +161,9 @@ def build_services(
         platform=sys.platform,
         model=str(getattr(engine, "model", "") or data.get("model", "qwen3-3b")),
         engine_name=str(getattr(engine, "engine_name", "lemonade")),
+        screen=screen,
+        input=input_adapter,
+        hybrid=hybrid,
         persona_prompts={
             "maya": load_persona("girlfriend"),
             "teacher": load_persona("english_teacher"),

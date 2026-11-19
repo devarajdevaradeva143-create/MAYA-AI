@@ -21,6 +21,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -53,6 +54,8 @@ import com.devaraj.maya.ui.theme.MayaWarning
 fun MayaMainScreen(
     themeMode: ThemeMode,
     onThemeChange: (ThemeMode) -> Unit,
+    wakeRequest: Int = 0,
+    onWakeConsumed: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val app = context.applicationContext as MayaApp
@@ -61,6 +64,7 @@ fun MayaMainScreen(
             ConnectionViewModel.Factory(
                 connectionRepository = app.container.connectionRepository,
                 pairingRepository = app.container.pairingRepository,
+                settingsStore = app.container.settingsStore,
             )
         },
     )
@@ -91,6 +95,18 @@ fun MayaMainScreen(
 
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route ?: Routes.CHAT
+
+    LaunchedEffect(wakeRequest) {
+        if (wakeRequest > 0 && currentRoute != Routes.VOICE) {
+            navController.navigate(Routes.VOICE) {
+                popUpTo(navController.graph.findStartDestination().id) {
+                    saveState = true
+                }
+                launchSingleTop = true
+                restoreState = true
+            }
+        }
+    }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -138,6 +154,8 @@ fun MayaMainScreen(
             onConnect = connectionViewModel::connect,
             onForget = connectionViewModel::forgetLaptop,
             onToggleAutoConnect = connectionViewModel::setAutoConnect,
+            wakeRequest = wakeRequest,
+            onWakeConsumed = onWakeConsumed,
             modifier = Modifier.padding(padding),
         )
     }

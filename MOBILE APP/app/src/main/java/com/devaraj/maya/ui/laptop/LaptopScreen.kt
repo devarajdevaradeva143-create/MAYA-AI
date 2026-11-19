@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import com.devaraj.maya.R
 import com.devaraj.maya.data.remote.ConnectionState
 import com.devaraj.maya.domain.model.Device
+import com.devaraj.maya.domain.model.OperatingMode
 import com.devaraj.maya.ui.connection.reasonText
 import com.devaraj.maya.ui.theme.MayaSuccess
 import com.devaraj.maya.ui.theme.MayaWarning
@@ -49,6 +50,8 @@ fun LaptopScreen(
     onForget: () -> Unit,
     onToggleAutoConnect: (Boolean) -> Unit,
     controlState: LaptopControlUiState? = null,
+    operatingMode: OperatingMode = OperatingMode.AI,
+    remoteViewModel: RemoteViewModel? = null,
     onControlAppNameChange: (String) -> Unit = {},
     onControlVolumeChange: (Int) -> Unit = {},
     onControlClipboardChange: (String) -> Unit = {},
@@ -160,7 +163,7 @@ fun LaptopScreen(
                 Text(text = stringResource(R.string.laptop_pair_button))
             }
 
-            if (controlState != null) {
+            if (controlState != null && remoteViewModel == null) {
                 HorizontalDivider(modifier = Modifier.padding(vertical = 20.dp))
                 LaptopControlSection(
                     state = controlState,
@@ -183,6 +186,41 @@ fun LaptopScreen(
                     onNotify = onControlNotify,
                     onConfirm = onControlConfirm,
                     onCancel = onControlCancel,
+                )
+            }
+
+            if (remoteViewModel != null) {
+                HorizontalDivider(modifier = Modifier.padding(vertical = 20.dp))
+                RemoteSection(
+                    vm = remoteViewModel,
+                    operatingMode = operatingMode,
+                    connectionEnabled = connectionState is ConnectionState.Connected,
+                    actionsContent = {
+                        if (controlState != null) {
+                            LaptopControlSection(
+                                state = controlState,
+                                enabled = connectionState is ConnectionState.Connected,
+                                onAppNameChange = onControlAppNameChange,
+                                onVolumeChange = onControlVolumeChange,
+                                onClipboardChange = onControlClipboardChange,
+                                onOpenApp = onControlOpenApp,
+                                onLock = onControlLock,
+                                onSleep = onControlSleep,
+                                onMute = onControlMute,
+                                onUnmute = onControlUnmute,
+                                onVolume = onControlVolume,
+                                onScreenshot = onControlScreenshot,
+                                onMediaPlay = onControlMediaPlay,
+                                onMediaPause = onControlMediaPause,
+                                onMediaNext = onControlMediaNext,
+                                onMediaPrev = onControlMediaPrev,
+                                onClipboardSet = onControlClipboardSet,
+                                onNotify = onControlNotify,
+                                onConfirm = onControlConfirm,
+                                onCancel = onControlCancel,
+                            )
+                        }
+                    },
                 )
             }
 
@@ -284,6 +322,15 @@ private fun StatusCard(connectionState: ConnectionState, device: Device) {
                 DetailRow(
                     label = stringResource(R.string.laptop_engine),
                     value = health.engine ?: "—",
+                )
+                DetailRow(
+                    label = "OS",
+                    value = when (health.platform) {
+                        "win32", "windows" -> "Windows"
+                        "linux" -> "Linux / Fedora"
+                        "darwin" -> "macOS"
+                        else -> health.platform
+                    },
                 )
                 if (health.capabilities.isNotEmpty()) {
                     DetailRow(

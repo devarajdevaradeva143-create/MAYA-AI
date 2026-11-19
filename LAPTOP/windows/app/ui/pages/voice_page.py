@@ -62,10 +62,11 @@ class VoicePage(QWidget):
 
         # Language selector
         self._lang_combo = QComboBox()
-        self._lang_combo.addItem("English", "en-in")
-        self._lang_combo.addItem("Tamil (pending)", "ta")
+        self._lang_combo.addItem("English", "en")
+        self._lang_combo.addItem("Tamil", "ta")
         self._lang_combo.setFixedWidth(140)
         self._lang_combo.currentIndexChanged.connect(self._on_lang_change)
+        self._selected_lang = str(self._lang_combo.currentData() or "en")
 
         # Orb button (click-to-toggle listen/clap)
         self._orb_button = QPushButton("🎤")
@@ -144,15 +145,26 @@ class VoicePage(QWidget):
 
     def _on_lang_change(self, index: int) -> None:
         lang = str(self._lang_combo.currentData())
-        # Update voice adapter default language
-        # (already stored; just a UI note)
-        note = "Tamil STT — model pending" if lang == "ta" else "English"
+        self._selected_lang = lang
+        try:
+            st = self._voice.status()
+            if lang == "ta":
+                available = bool(st.get("stt", {}).get("tamil_stt_available")) or st.get("tts", {}).get("tamil_available")
+                note = "Tamil ready" if available else "Tamil needs models"
+            else:
+                note = "English"
+        except Exception:
+            note = "English" if lang != "ta" else "Tamil"
         self._wake_label.setText(f"Wake: clap enabled, STT {note}")
 
     def _on_tts_test(self) -> None:
         try:
-            text = "Vanakkam da! Enna aachu? Konjam rest eduthukko."
-            self._voice.speak(text)
+            if getattr(self, "_selected_lang", "en") == "ta":
+                text = "வணக்கம், நான் மாயா. இது ஒரு தமிழ் குரல் சோதனை."
+                self._voice.speak(text, lang="tamil")
+            else:
+                text = "Vanakkam da! Enna aachu? Konjam rest eduthukko."
+                self._voice.speak(text, lang="english")
             self.transcript_added.emit("assistant", text)
         except VoiceError as e:
             self.transcript_added.emit("system", f"TTS error: {e}")

@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import subprocess
-import sys
-
 from PySide6.QtCore import QThread, Signal
 from PySide6.QtWidgets import (
     QFrame,
@@ -133,7 +130,7 @@ class SecurityPage(QWidget):
         vl.addWidget(self._voice_status)
 
         vrow = QHBoxLayout()
-        self._voice_enroll_btn = QPushButton("Enroll via CLI")
+        self._voice_enroll_btn = QPushButton("Enroll voiceprint")
         self._voice_enroll_btn.setFixedHeight(32)
         self._voice_enroll_btn.clicked.connect(self._on_voice_enroll)
         vrow.addWidget(self._voice_enroll_btn)
@@ -268,30 +265,14 @@ class SecurityPage(QWidget):
         )
 
     def _on_voice_enroll(self) -> None:
-        ok = QMessageBox.question(
-            self,
-            "Voice Enrollment",
-            "Voice enrollment requires recording 3 phrases.\n"
-            "This opens a console window running Maya CLI.\n\nProceed?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-        )
-        if ok == QMessageBox.StandardButton.Yes:
-            try:
-                import os
-                from pathlib import Path
-                project_root = Path(__file__).resolve().parents[4]  # windows -> LAPTOP -> project
-                # fallback: try JARVIS next to project root
-                cwd = project_root / "JARVIS"
-                if not (cwd / "custom").is_dir():
-                    cwd = Path(os.getcwd())
-                subprocess.Popen(
-                    [sys.executable, "-m", "custom.cli", "biometrics", "voice-enroll"],
-                    cwd=str(cwd),
-                    creationflags=subprocess.CREATE_NEW_CONSOLE,
-                )
-                self._voice_msg.setText("Enrollment console opened.")
-            except Exception as exc:  # noqa: BLE001
-                self._voice_msg.setText(f"Failed to launch: {exc}")
+        from app.ui.voiceprint_wizard import VoiceprintWizard
+
+        wizard = VoiceprintWizard(self._security, self)
+        if wizard.exec() == VoiceprintWizard.DialogCode.Accepted:
+            self._voice_msg.setText("Voiceprint enrolled.")
+        else:
+            self._voice_msg.setText("Enrollment cancelled.")
+        self._refresh()
 
     def _on_voice_reset(self) -> None:
         ok = QMessageBox.question(

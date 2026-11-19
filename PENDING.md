@@ -8,10 +8,10 @@
 
 ## 0. Status snapshot
 
-- **Windows desktop app**: complete for the planned 11 phases (195 tests pass, ruff clean, `dist\mayaai.exe` + desktop shortcut working).
+- **Windows desktop app**: complete for the planned 11 phases + items 2-10 below (240 tests pass, ruff clean, `dist\mayaai.exe` + desktop shortcut working).
 - **Git**: initialized, first commit `11444d7` pushed to `origin/main`.
 - **OpenJarvis**: untouched (read-only), clean.
-- **Mobile app**: Phases 0-12 implemented, debug+release APK built; Phase 9 on-device model test pending.
+- **Mobile app**: Phases 0-12 + remote screen/input/files + HYBRID control bus implemented; debug APK rebuilt 19 Nov. Physical on-device tests (airplane mode, USB/BT) still pending.
 - **Model**: Qwen 3B (laptop); tamil-lm-2b switch deferred by user.
 
 ---
@@ -20,27 +20,28 @@
 
 | # | Item | What's needed | Effort |
 |---|---|---|---|
-| 1 | OS-level autostart (boot-la Maya auto-start) | Registry write + tray-only launch wiring; `install_autostart.ps1` exists but not wired | Medium |
-| 2 | Tamil TTS | `uv pip install piper-tts` + Tamil `.onnx` voice in `MAYA AI\voice\tamil\` (user action) | User |
-| 3 | Tamil STT | Vosk has no Tamil model → Whisper (or other) recogniser; larger change | Large |
-| 4 | Language Intelligence (translation) | `custom\tools\language.py` translation functions are stubs; detect/phonetic work | Medium |
-| 5 | English Teacher — AI lessons | 4 hardcoded lessons; AI-generated lessons + progress persistence | Medium |
-| 6 | Voiceprint enrollment wizard | Currently "Enroll via CLI" opens a console; in-app wizard needed | Medium |
-| 7 | Windows Hello enrollment | UI checks availability + opens settings; actual enrollment is in Windows Settings (by design) | By design |
-| 8 | Monitor WMI temp | CPU temp cached 10s; runs on UI thread (QThread move optional) | Small |
-| 9 | Server Start button blocks UI | 1-2s freeze; optional QThread | Small |
-| 10 | Multi-device live transport | Pairing + signed bundles work; "live transport" pending. Bundles signed-not-encrypted, no anti-replay | Large |
-| 11 | PIN not set confirmation | `security.json` exists with a PIN (created 18 Nov 17:27); confirm whether user set it | User |
+| 1 | OS-level autostart (boot-la Maya auto-start) | Registry write + tray-only launch wiring; `install_autostart.ps1` exists but not wired | **Pending** (user choice) |
+| 2 | Tamil TTS | Piper Tamil voice installed; Python API (CLI broken). ✅ Done | Done |
+| 3 | Tamil STT | faster-whisper small model; lazy load; Tamil routing. ✅ Done | Done |
+| 4 | Language Intelligence (translation) | `translate()` via local engine; detect/phonetic kept. ✅ Done | Done |
+| 5 | English Teacher — AI lessons | AI-generated lessons + progress persistence + fallback. ✅ Done | Done |
+| 6 | Voiceprint enrollment wizard | In-app wizard replaces CLI. ✅ Done | Done |
+| 7 | Windows Hello enrollment | By design (Windows Settings). ✅ Done | By design |
+| 8 | Monitor WMI temp | Async snapshot on QThreadPool; no UI freeze. ✅ Done | Done |
+| 9 | Server Start button blocks UI | Async start via QThread. ✅ Done | Done |
+| 10 | Multi-device live transport | LAN send/receive + nonce anti-replay. ✅ Done | Done |
+| 11 | PIN not set confirmation | User action | User |
 
 ## 2. Windows app — known limitations (by design / environment)
 
-- STT: English + Indian English only (no Tamil)
-- TTS: SAPI voices (heera, neerja, zira); Piper optional
+- STT: English + Indian English (Vosk) + Tamil (faster-whisper small). Tamil accuracy limited by the small model.
+- TTS: SAPI voices (heera, neerja, zira) + Piper (English optional, Tamil installed).
 - Phone server: LAN only, no TLS (LAN assumption)
 - PC control: 22 actions, some Windows-only (`_require_windows`)
 - Engine: Qwen (weak Tamil/Tanglish), Lemonade on port 13305
-- English teacher: 4 static lessons, no progress tracking
+- English teacher: 4 static lessons + AI-generated lessons with progress persistence (fallback when engine is down or output is unusable).
 - Knowledge/RAG: English embeddings (`potion-base-8M`); Tamil paraphrase quality low (optional upgrade to `potion-multilingual-128M`, ~512 MB)
+- Translation: uses the local engine only; English→Tamil quality is limited by the 2B model.
 
 ## 3. Mobile app — pending
 
@@ -49,10 +50,11 @@
 | 1 | Phase 9 on-device model test | Airplane mode reply, cancel, unload, tok/s + RAM measurement (DoD unverified) |
 | 2 | Phase 10 Vosk name detection | Not implemented |
 | 3 | Phase 11 USB/BT manual test | Not run |
-| 4 | Phase 12 instrumented tests | `androidTest` folder missing |
-| 5 | Model switch to tamil-lm-2b | Deferred by user (currently Qwen3 1.7B) |
-| 6 | WhatsApp send — manual phone test | ✅ Verified 19-11 on Infinix X6857B (Android 16): confirm dialog → WhatsApp Conversation opens with message prefilled; Send pressed by user. Send not auto-pressed by design |
-| 7 | Maya AI-drafted WhatsApp message | Not implemented (idea: chat reply → "Send to WhatsApp" prefill) |
+| 4 | Physical remote-control test | Screen/input/files exercised on Infinix X6857B (pending) |
+| 5 | Fedora screen/input adapter | Windows only today; Fedora adapter not wired |
+| 6 | Internet/WAN remote | Needs relay + TLS design (LAN/hotspot/USB in v1) |
+| 7 | Model switch to tamil-lm-2b | Deferred by user (currently Qwen3 1.7B) |
+| 8 | Maya AI-drafted WhatsApp message | Not implemented (idea: chat reply → "Send to WhatsApp" prefill) |
 
 ## 4. Cross-cutting pending (laptop + Fedora)
 
@@ -66,11 +68,11 @@
 | 6 | Knowledge embeddings upgrade | Optional: `minishlab/potion-multilingual-128M` + rebuild index |
 | 7 | Cloud Gemini | Live key pending (user action) |
 
-## 5. Cleanup (ask user first)
+## 5. Cleanup (done 19 Nov 2026)
 
-- Legacy duplicates: `MAYA AI\scripts\maya-launch.ps1`, `maya-launch.sh`, `LAPTOP\windows\app\autostart.ps1`
-- Old embedding cache `MAYA AI\Model\hf\hub\models--minishlab--potion-base-8M` (~29 MB)
-- `security.json` reset if the 17:27 PIN was not user-set
+- ✅ Legacy duplicates removed: `MAYA AI\scripts\maya-launch.ps1`, `maya-launch.sh`, `LAPTOP\windows\app\autostart.ps1`
+- ✅ Old embedding cache removed: `MAYA AI\Model\hf\hub\models--minishlab--potion-base-8M` (~29 MB freed)
+- ✅ `security.json` reset (backup: `JARVIS\backups\security.json.bak-19nov`); next launch will prompt for fresh PIN setup
 
 ## 6. Verified complete (honest claim)
 
@@ -84,7 +86,7 @@
 - Engine venv repaired 19-11: `.venv-engine` editable link pointed to deleted `maya-maya\OpenJarvis` → reinstalled from current path; `import openjarvis` + `jarvis --version` OK; JARVIS tests 333 passed / 1 skipped
 - `.gitignore` fix 19-11: `DEVARAJ/` was unanchored → ignored `com/devaraj/` Kotlin package (mobile source never committed); now `/DEVARAJ/`, mobile source tracked
 - PC Control page 19-11: display labels were passed straight to `ControlService` (every action failed with "Unsupported action"); added `ACTION_IDS` label→id map, `ConfirmDialog` was a `QWidget` with no `setModal` + `setContentsMargens` typo (crashed), audit signal now connected
-- WhatsApp (laptop) 19-11: `whatsapp.message` action — confirm dialog → opens WhatsApp Desktop with `whatsapp://send?phone=…&text=…` prefilled (browser `wa.me` fallback); user presses Send. Tests: +9 (`tests/test_whatsapp.py`)
+- Remote control (19-11): server + Windows adapters + Android UI for screen (JPEG polling), tap/drag/scroll/type input, file browse/download/upload in allowed roots, HYBRID control bus with takeover/release; 22 new Windows tests (230 total pass); contract frozen v1.1 §9A/§9B; docs/REMOTE-CONTROL.md
 - Phone ↔ laptop pairing 19-11: Infinix X6857B paired to `10.87.222.204:8420` over the phone's hotspot (manual IP; mDNS not used). Phone Laptop tab shows "Connected to SELVA-KUMAR" + capabilities; laptop `/api/v1/health` reports `paired_devices: 2` (this phone + an older test token). End-to-end chat verified from the phone: "hii" → laptop reply rendered with a `Laptop` badge. Headless server run with `python -u -m app --headless` so the one-time PIN is visible in stdout; PIN is valid 120 s
 
 ## 7. Known issues / pitfalls
@@ -92,7 +94,7 @@
 - PowerShell reports `Exit code: 1` for `uv`/`jarvis` even on success (stderr warnings). Harmless.
 - `openjarvis.security: Failed to set up rate limiter: No module named 'openjarvis_rust'` — harmless warning.
 - Tests must isolate storage with temp paths (`MAYA_*_STORE`, `MAYA_CHAT_HISTORY`, etc.). Never let tests write into `MAYA AI\memory\offline\`.
-- Bundles are signed, not encrypted; no anti-replay/nonce.
+- Bundles are signed, not encrypted; nonce anti-replay now included for new bundles.
 - Pairing codes are long-lived shared secrets; never log/print after pairing.
 - `security watchdog` is command-only; never add to autostart without user asking.
 - Voice re-check is fail-closed once enabled.

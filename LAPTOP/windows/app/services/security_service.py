@@ -115,3 +115,62 @@ class SecurityService:
             return {"ok": False, "error": "biometrics unavailable"}
         res = _safe_call(_biometrics.voice_reset)
         return res if isinstance(res, dict) else {"ok": False, "error": str(res)}
+
+    # -- voiceprint enrollment ----------------------------------------
+    def voice_enroll_ready(self) -> dict[str, Any]:
+        reasons: list[str] = []
+        speaker_model = False
+        mic = False
+        try:
+            if _biometrics is None:
+                reasons.append("biometrics module unavailable")
+            else:
+                speaker_model = bool(_biometrics.speaker_available())
+                if not speaker_model:
+                    reasons.append("speaker model missing (vosk-spk)")
+        except Exception as exc:  # noqa: BLE001
+            reasons.append(str(exc))
+        try:
+            import sys
+
+            if sys.platform != "win32":
+                reasons.append("microphone capture is Windows-only")
+            else:
+                from custom.tools import voice_stt
+
+                st = voice_stt.status()
+                mic = bool(st.get("windows_mic")) and bool(st.get("vosk_installed"))
+                if not mic:
+                    reasons.append("microphone or Vosk model unavailable")
+        except Exception as exc:  # noqa: BLE001
+            reasons.append(str(exc))
+        return {"ready": not reasons, "speaker_model": speaker_model, "mic": mic, "reasons": reasons}
+
+    def voice_capture_sample(self, seconds: int = 5) -> dict[str, Any]:
+        if _biometrics is None:
+            return {"ok": False, "error": "biometrics unavailable"}
+        try:
+            from custom.tools import voice_stt
+
+            wav, _peak = voice_stt.record(seconds=seconds)
+        except Exception as exc:  # noqa: BLE001
+            return {"ok": False, "error": f"Could not record audio: {exc}"}
+        try:
+            text = _biometrics.transcribe_wav(wav)
+            vector = _biometrics.speaker_vector(wav)
+            return {"ok": True, "text": text, "vector": vector, "error": None}
+        except Exception as exc:  # noqa: BLE001
+            return {"ok": False, "error": f"Could not process sample: {exc}"}
+        finally:
+            try:
+                from pathlib import Path
+
+                Path(wav).unlink(missing_ok=True)
+            except Exception:  # noqa: BLE001
+                pass
+
+    def voice_enroll(self, transcripts: list[str], vectors: list[list[float]]) -> dict[str, Any]:
+        if _biometrics is None:
+            return {"ok": False, "error": "biometrics unavailable"}
+        res = _safe_call(_biometrics.voice_enroll, transcripts, vectors)
+        return res if isinstance(res, dict) else {"ok": False, "error": str(res)}

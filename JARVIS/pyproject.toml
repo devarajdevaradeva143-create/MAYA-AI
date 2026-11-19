@@ -22,6 +22,9 @@ dependencies = [
 dev = ["pytest"]
 # Semantic RAG only. Without it Maya falls back to BM25 — nothing breaks.
 semantic = ["model2vec>=0.10"]
+# Local voice models (Piper TTS / faster-whisper STT). Optional: the CLI
+# reports an honest "not installed" message when these are missing.
+voice = ["piper-tts>=1.8.0", "faster-whisper>=1.2.1", "av>=18,<19"]
 
 [project.scripts]
 maya = "custom.cli:main"

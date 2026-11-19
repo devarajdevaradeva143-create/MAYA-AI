@@ -37,7 +37,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -46,6 +50,8 @@ import com.devaraj.maya.domain.model.AiSource
 import com.devaraj.maya.domain.model.Message
 import com.devaraj.maya.domain.model.MessageRole
 import com.devaraj.maya.domain.model.MessageStatus
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 import com.devaraj.maya.ui.connection.reasonText
 
 @Composable
@@ -258,6 +264,21 @@ private fun MessageBubble(message: Message, onRetry: () -> Unit) {
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            if (!isUser && message.content.isNotBlank()) {
+                val context = LocalContext.current
+                TextButton(onClick = {
+                    try {
+                        val encoded = URLEncoder.encode(message.content, StandardCharsets.UTF_8.toString())
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/?text=$encoded"))
+                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        context.startActivity(intent)
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "WhatsApp not available", Toast.LENGTH_SHORT).show()
+                    }
+                }) {
+                    Text(text = "Share to WhatsApp", style = MaterialTheme.typography.labelSmall)
+                }
+            }
             if (message.status == MessageStatus.FAILED) {
                 TextButton(onClick = onRetry) {
                     Text(text = stringResource(R.string.chat_retry))

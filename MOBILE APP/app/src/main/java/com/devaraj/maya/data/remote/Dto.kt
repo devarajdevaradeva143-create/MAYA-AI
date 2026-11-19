@@ -230,4 +230,107 @@ data class ApiErrorEnvelope(
     val error: ApiError,
 )
 
+// --- Remote control + file transfer + hybrid (contract 9A / 9B) ---
+
+@Serializable
+data class RemoteConfirmRequest(
+    @SerialName("confirm_token") val confirmToken: String? = null,
+)
+
+@Serializable
+data class RemoteStartResponse(
+    val status: String,
+    @SerialName("confirm_token") val confirmToken: String? = null,
+    val description: String? = null,
+    @SerialName("expires_in") val expiresIn: Int? = null,
+    @SerialName("session_token") val sessionToken: String? = null,
+)
+
+@Serializable
+data class RemoteStopRequest(
+    @SerialName("session_token") val sessionToken: String,
+)
+
+@Serializable
+data class RemoteSessionDto(
+    val status: String? = null,
+    @SerialName("session_token") val sessionToken: String? = null,
+    @SerialName("expires_in") val expiresIn: Int? = null,
+    val active: Boolean? = null,
+)
+
+@Serializable
+data class RemoteStatusDto(
+    val active: Boolean,
+    @SerialName("expires_in") val expiresIn: Int = 0,
+)
+
+@Serializable
+data class InputEventDto(
+    val type: String,
+    val x: Float? = null,
+    val y: Float? = null,
+    val button: String? = null,
+    val dy: Int? = null,
+    val text: String? = null,
+    val key: String? = null,
+)
+
+@Serializable
+data class InputRequest(
+    @SerialName("session_token") val sessionToken: String,
+    val events: List<InputEventDto>,
+)
+
+@Serializable
+data class InputResponse(
+    val status: String = "done",
+    val applied: Int = 0,
+)
+
+@Serializable
+data class FileRootsDto(
+    val roots: List<String> = emptyList(),
+)
+
+@Serializable
+data class FileEntryDto(
+    val name: String,
+    val path: String,
+    @SerialName("is_dir") val isDir: Boolean,
+    val size: Long? = null,
+)
+
+@Serializable
+data class FileListDto(
+    val path: String,
+    val entries: List<FileEntryDto> = emptyList(),
+)
+
+@Serializable
+data class FileUploadDto(
+    val status: String = "done",
+    val path: String,
+    val size: Int,
+)
+
+@Serializable
+data class HybridTaskDto(
+    val id: String,
+    val description: String,
+    val status: String,
+)
+
+@Serializable
+data class HybridStatusDto(
+    val controller: String,
+    @SerialName("ai_busy") val aiBusy: Boolean = false,
+    @SerialName("queued_tasks") val queuedTasks: Int = 0,
+    @SerialName("running_task") val runningTask: String? = null,
+    val conflicts: Int = 0,
+    @SerialName("last_takeover") val lastTakeover: Long? = null,
+    @SerialName("uptime_s") val uptimeS: Long = 0,
+    val tasks: List<HybridTaskDto> = emptyList(),
+)
+
 const val API_VERSION = 1

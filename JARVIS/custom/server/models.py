@@ -152,6 +152,121 @@ class PcCancelRequest(BaseModel):
     confirm_token: str = Field(min_length=8, max_length=128)
 
 
+# --- Remote control (contract 9A) ---------------------------------------
+
+REMOTE_KEYS = {
+    "enter",
+    "tab",
+    "esc",
+    "backspace",
+    "delete",
+    "space",
+    "up",
+    "down",
+    "left",
+    "right",
+    "home",
+    "end",
+    "pageup",
+    "pagedown",
+    "ctrl+a",
+    "ctrl+c",
+    "ctrl+v",
+    "ctrl+x",
+    "ctrl+z",
+    "alt+tab",
+    "f5",
+}
+
+
+class RemoteStartRequest(BaseModel):
+    confirm_token: str | None = Field(default=None, max_length=128)
+
+
+class RemoteStartResponse(BaseModel):
+    status: str
+    confirm_token: str | None = None
+    description: str | None = None
+    expires_in: int | None = None
+    session_token: str | None = None
+
+
+class RemoteStopRequest(BaseModel):
+    session_token: str = Field(min_length=8, max_length=128)
+
+
+class RemoteStatusResponse(BaseModel):
+    active: bool
+    expires_in: int = 0
+
+
+class RemoteStopResponse(BaseModel):
+    status: str = "done"
+    active: bool = False
+    expires_in: int = 0
+
+
+class RemoteInputEvent(BaseModel):
+    type: Literal["move", "click", "scroll", "text", "key"]
+    x: float | None = Field(default=None, ge=0.0, le=1.0)
+    y: float | None = Field(default=None, ge=0.0, le=1.0)
+    button: Literal["left", "right", "middle"] | None = None
+    dy: int | None = Field(default=None, ge=-10, le=10)
+    text: str | None = Field(default=None, max_length=500)
+    key: str | None = Field(default=None, max_length=16)
+
+    @model_validator(mode="after")
+    def _shape(self) -> RemoteInputEvent:
+        if self.type == "move":
+            if self.x is None or self.y is None:
+                raise ValueError("move needs x and y")
+        elif self.type == "click":
+            if self.button is None:
+                raise ValueError("click needs a button")
+        elif self.type == "scroll":
+            if self.dy is None:
+                raise ValueError("scroll needs dy")
+        elif self.type == "text":
+            if not self.text:
+                raise ValueError("text event needs text")
+        elif self.type == "key":
+            if self.key not in REMOTE_KEYS:
+                raise ValueError("unsupported key")
+        return self
+
+
+class RemoteInputRequest(BaseModel):
+    session_token: str = Field(min_length=8, max_length=128)
+    events: list[RemoteInputEvent] = Field(min_length=1, max_length=32)
+
+
+class RemoteInputResponse(BaseModel):
+    status: str = "done"
+    applied: int = 0
+
+
+class FileRootsResponse(BaseModel):
+    roots: list[str] = Field(default_factory=list)
+
+
+class FileEntry(BaseModel):
+    name: str
+    path: str
+    is_dir: bool
+    size: int | None = None
+
+
+class FileListResponse(BaseModel):
+    path: str
+    entries: list[FileEntry] = Field(default_factory=list)
+
+
+class FileUploadResponse(BaseModel):
+    status: str = "done"
+    path: str
+    size: int
+
+
 class WakeStatusResponse(BaseModel):
     listening: bool
     clap: bool = True

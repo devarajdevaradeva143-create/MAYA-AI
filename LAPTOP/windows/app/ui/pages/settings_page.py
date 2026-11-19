@@ -6,6 +6,8 @@ ruamel round-trip write. The page never edits YAML itself.
 
 from __future__ import annotations
 
+import logging
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +28,9 @@ from PySide6.QtWidgets import (
 from app.services.server_service import shared_server_service
 from app.settings_repository import SettingsError, SettingsRepository
 from app.ui.theme import MODES, ThemeManager
+from app.ui.workers import ServerStartWorker
+
+logger = logging.getLogger("maya.ui.settings")
 
 
 def _card(title: str, hint: str = "") -> tuple[QFrame, QVBoxLayout]:
@@ -56,10 +61,14 @@ class SettingsPage(QScrollArea):
         self,
         repository: SettingsRepository,
         theme: ThemeManager | None = None,
+        *,
+        server_factory: Callable[[], Any] | None = None,
     ) -> None:
         super().__init__()
         self._repository = repository
         self._theme = theme
+        self._server_factory = server_factory or shared_server_service
+        self._server_start_worker: ServerStartWorker | None = None
         self.setWidgetResizable(True)
         self.setObjectName("settingsPage")
 
@@ -168,15 +177,28 @@ class SettingsPage(QScrollArea):
     def _server_instance(self):
         """The app-wide server instance (shared with auto-start)."""
         if self._server is None:
-            self._server = shared_server_service()
+            self._server = self._server_factory()
         return self._server
 
     def showEvent(self, event) -> None:  # noqa: N802 - Qt signature
         self._refresh_server_state()
         super().showEvent(event)
 
+    def shutdown(self) -> None:
+        """Wait for a pending start before the page is destroyed (QThread safety)."""
+        worker = self._server_start_worker
+        if worker is not None and worker.isRunning():
+            worker.wait(5000)
+        self._server_start_worker = None
+
+    def closeEvent(self, event) -> None:  # noqa: N802 - Qt signature
+        self.shutdown()
+        super().closeEvent(event)
+
     def _refresh_server_state(self) -> None:
         """Match the card to the real server state (e.g. auto-started)."""
+        if self._is_server_starting():
+            return  # a worker owns the labels until it reports back
         try:
             svc = self._server_instance()
             running = bool(getattr(svc, "running", False))
@@ -203,38 +225,83 @@ class SettingsPage(QScrollArea):
         except SettingsError as exc:
             self._server_status.setText(f"Status: Error — {exc}")
 
+    def _is_server_starting(self) -> bool:
+        worker = self._server_start_worker
+        return worker is not None and worker.isRunning()
+
     def _on_server_start(self) -> None:
-        self._server_start_btn.setEnabled(False)
-        self._server_status.setText("Status: Starting...")
-        from PySide6.QtWidgets import QApplication
-        QApplication.processEvents()
+        """Queue the server boot on a worker thread and return immediately."""
+        if self._is_server_starting():
+            return
+
         try:
             svc = self._server_instance()
-            svc.start()
-            self._server_status.setText(
-                f"Status: Running on {svc.host}:{svc.bound_port or svc.port}"
-            )
-            self._server_stop_btn.setEnabled(True)
-            self._server_pin_btn.setEnabled(True)
-            # persist auto_start
-            self._repository.update({"server.auto_start": self._server_auto.isChecked()})
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001 - report, never crash
             self._server_status.setText(f"Status: Error — {exc}")
             self._server_start_btn.setEnabled(True)
+            return
+
+        self._server_status.setText("Status: Starting...")
+        self._server_start_btn.setEnabled(False)
+        self._server_stop_btn.setEnabled(False)
+        self._server_pin_btn.setEnabled(False)
+
+        worker = ServerStartWorker(svc, self)
+        worker.finished_ok.connect(self._on_server_started)
+        worker.failed.connect(self._on_server_start_failed)
+        worker.finished.connect(self._release_server_start_worker)
+        self._server_start_worker = worker
+        try:
+            worker.start()
+        except Exception as exc:  # noqa: BLE001 - thread pool refusal is rare
+            self._server_start_worker = None
+            self._server_status.setText(f"Status: Error — {exc}")
+            self._server_start_btn.setEnabled(True)
+            worker.deleteLater()
+
+    def _on_server_started(self, address: str) -> None:
+        """Worker reported success (UI thread): show the real address."""
+        self._server_status.setText(f"Status: Running on {address or 'this laptop'}")
+        self._server_start_btn.setEnabled(False)
+        self._server_stop_btn.setEnabled(True)
+        self._server_pin_btn.setEnabled(True)
+        # persist auto_start (the checkbox is the user's intent, not the server)
+        try:
+            self._repository.update({"server.auto_start": self._server_auto.isChecked()})
+        except SettingsError as exc:
+            logger.warning("Could not persist server.auto_start: %s", exc)
+
+    def _on_server_start_failed(self, message: str) -> None:
+        """Worker reported an error (UI thread): show it and allow a retry."""
+        self._server_status.setText(f"Status: Error — {message}")
+        self._server_start_btn.setEnabled(True)
+        self._server_stop_btn.setEnabled(False)
+        self._server_pin_btn.setEnabled(False)
+
+    def _release_server_start_worker(self) -> None:
+        """QThread finished (UI thread): drop the reference and free the thread."""
+        worker = self._server_start_worker
+        self._server_start_worker = None
+        if worker is not None:
+            worker.deleteLater()
 
     def _on_server_stop(self) -> None:
+        if self._is_server_starting():
+            return  # let the pending start report back first
         svc = self._server
+        self._server_start_btn.setEnabled(False)
+        self._server_stop_btn.setEnabled(False)
+        self._server_pin_btn.setEnabled(False)
+        self._server_status.setText("Status: Stopping...")
         if svc is not None:
             try:
                 svc.stop()
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001 - stop must never crash the page
                 pass
         self._server = None
         self._server_status.setText("Status: Stopped")
-        self._server_stop_btn.setEnabled(False)
-        self._server_pin_btn.setEnabled(False)
-        self._server_start_btn.setEnabled(True)
         self._server_pin_label.setText("Pairing PIN: —")
+        self._server_start_btn.setEnabled(True)
 
     def _on_server_pin(self) -> None:
         svc = self._server

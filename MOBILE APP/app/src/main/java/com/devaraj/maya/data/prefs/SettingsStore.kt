@@ -14,6 +14,7 @@ import java.io.IOException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
+import com.devaraj.maya.domain.model.OperatingMode
 
 private val Context.mayaDataStore: DataStore<Preferences> by preferencesDataStore(
     name = "maya_settings",
@@ -38,6 +39,8 @@ data class MayaSettings(
     val controlRequireUnlock: Boolean = true,
     val pickedFolders: Set<String> = emptySet(),
     val connectionMode: String = "wifi",
+    val wakeNameEnabled: Boolean = false,
+    val operatingMode: OperatingMode = OperatingMode.AI,
 ) {
     companion object {
         const val DEFAULT_PORT = 8420
@@ -59,6 +62,8 @@ class SettingsStore(private val context: Context) {
         val CONTROL_REQUIRE_UNLOCK = booleanPreferencesKey("control_require_unlock")
         val PICKED_FOLDERS = stringSetPreferencesKey("picked_folders")
         val CONNECTION_MODE = stringPreferencesKey("connection_mode")
+        val WAKE_NAME_ENABLED = booleanPreferencesKey("wake_name_enabled")
+        val OPERATING_MODE = stringPreferencesKey("operating_mode")
     }
 
     val settings: Flow<MayaSettings> = context.mayaDataStore.data
@@ -75,6 +80,8 @@ class SettingsStore(private val context: Context) {
                 controlRequireUnlock = prefs[Keys.CONTROL_REQUIRE_UNLOCK] ?: true,
                 pickedFolders = prefs[Keys.PICKED_FOLDERS] ?: emptySet(),
                 connectionMode = prefs[Keys.CONNECTION_MODE] ?: "wifi",
+                wakeNameEnabled = prefs[Keys.WAKE_NAME_ENABLED] ?: false,
+                operatingMode = OperatingMode.from(prefs[Keys.OPERATING_MODE]),
             )
         }
 
@@ -116,7 +123,18 @@ class SettingsStore(private val context: Context) {
     suspend fun setConnectionMode(mode: String) {
         context.mayaDataStore.edit { prefs ->
             prefs[Keys.CONNECTION_MODE] = mode
-            if (mode == "usb") prefs[Keys.LAPTOP_HOST] = "127.0.0.1"
+        }
+    }
+
+    suspend fun setWakeNameEnabled(enabled: Boolean) {
+        context.mayaDataStore.edit { prefs ->
+            prefs[Keys.WAKE_NAME_ENABLED] = enabled
+        }
+    }
+
+    suspend fun setOperatingMode(mode: OperatingMode) {
+        context.mayaDataStore.edit { prefs ->
+            prefs[Keys.OPERATING_MODE] = mode.value
         }
     }
 

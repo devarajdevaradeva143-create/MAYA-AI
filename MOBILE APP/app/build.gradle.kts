@@ -114,6 +114,7 @@ dependencies {
     implementation(libs.retrofit.serialization)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.zxing.embedded)
+    implementation(libs.vosk.android)
 
     testImplementation(libs.junit)
     testImplementation(libs.mockwebserver)

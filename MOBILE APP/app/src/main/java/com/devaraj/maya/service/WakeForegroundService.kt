@@ -16,19 +16,24 @@ import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.devaraj.maya.MainActivity
 import com.devaraj.maya.R
+import com.devaraj.maya.data.prefs.SettingsStore
+import com.devaraj.maya.data.wake.VoskModelStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlin.math.abs
 
 /**
- * Background wake listener. Detects loud amplitude spikes (claps) while the
- * screen is off and launches Maya when triggered. Name detection ("Maya" x3)
- * requires a Vosk model (Phase 9/10 follow-up) and is intentionally not
- * implemented here; clap detection works offline with no extra deps.
+ * Background wake listener. Detects loud amplitude spikes (two claps) and,
+ * when the user imported a Vosk model and enabled name detection, three
+ * "Maya" utterances within 10 seconds. Both open Maya and start listening.
+ * Clap detection needs no extra dependencies; name detection stays fully
+ * offline and is skipped when no model is imported.
  */
 class WakeForegroundService : Service() {
 
@@ -108,7 +113,7 @@ class WakeForegroundService : Service() {
         val notification: Notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_maya)
             .setContentTitle("Maya wake listener")
-            .setContentText("Listening for claps. Tap to open.")
+            .setContentText("Listening for two claps or your wake word. Tap to open.")
             .setContentIntent(openApp)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
@@ -162,39 +167,67 @@ class WakeForegroundService : Service() {
         val clapThreshold = 12000 // amplitude
         val windowMs = 1500L
 
-        while (running) {
-            val read = record.read(buffer, 0, buffer.size)
-            if (read <= 0) continue
-            var peak = 0
-            for (i in 0 until read) {
-                val v = abs(buffer[i].toInt())
-                if (v > peak) peak = v
-            }
-            if (peak >= clapThreshold) {
-                val now = System.currentTimeMillis()
-                if (now - lastClapMs > windowMs) {
-                    clapCount = 1
-                } else {
-                    clapCount++
-                }
-                lastClapMs = now
-                if (clapCount >= 2) {
-                    clapCount = 0
-                    triggerWake()
-                }
-            }
-            // battery warning
-            checkBattery()
+        val wakeCounter = WakeWordCounter()
+        var nameDetector: NameWakeDetector? = null
+        val settings = runCatching {
+            runBlocking { SettingsStore(applicationContext).settings.first() }
+        }.getOrNull()
+        val voskStore = VoskModelStore(applicationContext)
+        if (settings?.wakeNameEnabled == true && voskStore.isInstalled()) {
+            nameDetector = runCatching { NameWakeDetector(voskStore.modelDir) }.getOrNull()
         }
 
-        try { record.stop() } catch (_: Exception) {}
-        record.release()
-        audioRecord = null
-        running = false
-        setRunning(false)
+        try {
+            while (running) {
+                val read = record.read(buffer, 0, buffer.size)
+                if (read <= 0) continue
+                var peak = 0
+                for (i in 0 until read) {
+                    val v = abs(buffer[i].toInt())
+                    if (v > peak) peak = v
+                }
+                if (peak >= clapThreshold) {
+                    val now = System.currentTimeMillis()
+                    if (now - lastClapMs > windowMs) {
+                        clapCount = 1
+                    } else {
+                        clapCount++
+                    }
+                    lastClapMs = now
+                    if (clapCount >= 2) {
+                        clapCount = 0
+                        triggerWake()
+                    }
+                }
+
+                val detector = nameDetector
+                if (detector != null) {
+                    val text = runCatching { detector.accept(buffer, read) }.getOrNull()
+                    if (text != null && wakeCounter.onFinalText(text)) {
+                        triggerWake()
+                    }
+                }
+
+                // battery warning
+                checkBattery()
+            }
+        } finally {
+            runCatching { nameDetector?.close() }
+            nameDetector = null
+            try { record.stop() } catch (_: Exception) {}
+            record.release()
+            audioRecord = null
+            running = false
+            setRunning(false)
+        }
     }
 
+    private var lastWakeMs = 0L
+
     private fun triggerWake() {
+        val now = System.currentTimeMillis()
+        if (now - lastWakeMs < 3_000) return
+        lastWakeMs = now
         val intent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra(EXTRA_WAKE, true)

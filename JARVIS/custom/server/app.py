@@ -17,13 +17,15 @@ from custom.server.contracts import ServerServices
 from custom.server.errors import ApiError, error_body
 from custom.server.lan import LanGuardMiddleware
 from custom.server.pair import PairingManager
-from custom.server.routes import chat, events, health, pair, pc, voice, wake
+from custom.server.remote import RemoteSessionStore
+from custom.server.routes import chat, events, health, hybrid, pair, pc, remote, voice, wake
 
 logger = logging.getLogger("maya.server")
 
 API_PREFIX = "/api/v1"
 JSON_BODY_LIMIT = 1 * 1024 * 1024
 AUDIO_BODY_LIMIT = 6 * 1024 * 1024
+FILE_BODY_LIMIT = 25 * 1024 * 1024
 
 
 class BodyLimitMiddleware:
@@ -44,11 +46,13 @@ class BodyLimitMiddleware:
                 length = int(raw_length)
             except ValueError:
                 length = 0
-            limit = (
-                AUDIO_BODY_LIMIT
-                if scope.get("path", "").endswith("/voice/stt")
-                else JSON_BODY_LIMIT
-            )
+            path = scope.get("path", "")
+            if path.endswith("/voice/stt"):
+                limit = AUDIO_BODY_LIMIT
+            elif path.endswith("/pc/files/upload"):
+                limit = FILE_BODY_LIMIT
+            else:
+                limit = JSON_BODY_LIMIT
             if length > limit:
                 response = JSONResponse(
                     error_body(2003, "Payload too large"),
@@ -118,6 +122,7 @@ def create_app(
     app.state.limiter = limiter or RateLimiter()
     app.state.pairing = pairing or PairingManager(services.settings, app.state.tokens)
     app.state.confirm = confirm_store or ConfirmStore()
+    app.state.remote = RemoteSessionStore()
     app.state.events_lock = asyncio.Lock()
     app.state.events_count = 0
 
@@ -129,7 +134,7 @@ def create_app(
     app.add_exception_handler(StarletteHTTPException, _http_error_handler)
     app.add_exception_handler(Exception, _unhandled_handler)
 
-    for module in (health, pair, chat, voice, pc, wake, events):
+    for module in (health, pair, chat, voice, pc, remote, hybrid, wake, events):
         app.include_router(module.router, prefix=API_PREFIX)
 
     return app

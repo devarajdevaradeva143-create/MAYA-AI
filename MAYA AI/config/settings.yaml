@@ -71,7 +71,11 @@ devices:
   bundle:
     max_files: 200        # files per bundle
     max_mb: 25            # total uncompressed size
-  # Bundles are HMAC-signed, NOT encrypted. Move them over USB / local share.
+  # Bundles are HMAC-signed, NOT encrypted. Transport is LAN-only.
+  transport:
+    port: 8765            # `maya devices receive` / `maya devices send`
+    max_mb: 25            # upload cap (also limited by bundle.max_mb)
+    allow_public: false   # never accept public IPs unless explicitly overridden
 
 # data flow — one way only
 flow:
@@ -158,12 +162,17 @@ voice:
     - hazel
     volume: 100             # 0-100 SAPI volume
   stt:
-    engine: vosk            # vosk = offline models below
+    engine: auto            # auto | vosk | whisper
     model_root: MAYA AI/Model/models
     models:
       en: vosk-en           # English (US) small
       en-in: vosk-en-in     # Indian English small
-      ta: vosk-ta           # official Vosk has no Tamil model
+      ta: vosk-ta           # official Vosk has no Tamil model (auto -> whisper)
+    whisper:
+      model: small          # tiny | base | small | medium | large-v3
+      download_root: MAYA AI/Model/whisper
+      compute_type: int8
+      # Tamil uses Whisper because official Vosk has no Tamil model.
   clap:
     threshold: 2800         # mic peak cutoff (calibrate if unsure)
     count: 3                # claps needed

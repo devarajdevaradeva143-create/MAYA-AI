@@ -9,9 +9,14 @@ import com.devaraj.maya.data.local.MayaDatabase
 import com.devaraj.maya.data.model.ModelStatus
 import com.devaraj.maya.data.model.OnDeviceModelManager
 import com.devaraj.maya.data.prefs.MayaSettings
+import com.devaraj.maya.domain.model.OperatingMode
 import com.devaraj.maya.data.prefs.SettingsStore
 import com.devaraj.maya.data.secure.TokenVault
+import com.devaraj.maya.data.wake.VoskModelStatus
+import com.devaraj.maya.data.wake.VoskModelStore
+import com.devaraj.maya.service.WakeForegroundService
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -35,6 +40,10 @@ data class SettingsUiState(
     val modelBusy: Boolean = false,
     val modelProgress: Int? = null,
     val modelMessage: String? = null,
+    val voskModel: VoskModelStatus = VoskModelStatus(),
+    val voskBusy: Boolean = false,
+    val voskProgress: Int? = null,
+    val voskMessage: String? = null,
 )
 
 class SettingsViewModel(
@@ -43,6 +52,7 @@ class SettingsViewModel(
     private val db: MayaDatabase,
     private val tokenVault: TokenVault,
     private val modelManager: OnDeviceModelManager,
+    private val voskModelStore: VoskModelStore,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SettingsUiState())
@@ -60,6 +70,10 @@ class SettingsViewModel(
             }
         }
         modelManager.refresh()
+        viewModelScope.launch(Dispatchers.IO) {
+            val status = voskModelStore.status()
+            _state.update { it.copy(voskModel = status) }
+        }
     }
 
     fun setTheme(mode: com.devaraj.maya.data.prefs.ThemeMode) {
@@ -68,6 +82,80 @@ class SettingsViewModel(
 
     fun setConnectionMode(mode: String) {
         viewModelScope.launch { settingsStore.setConnectionMode(mode) }
+    }
+
+    fun setOperatingMode(mode: com.devaraj.maya.domain.model.OperatingMode) {
+        viewModelScope.launch { settingsStore.setOperatingMode(mode) }
+    }
+
+    fun setWakeName(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsStore.setWakeNameEnabled(enabled)
+            restartWakeIfRunning()
+        }
+    }
+
+    fun importVoskModel(uri: Uri) {
+        if (_state.value.voskBusy) return
+        viewModelScope.launch {
+            _state.update {
+                it.copy(voskBusy = true, voskProgress = 0, voskMessage = null)
+            }
+            val result = voskModelStore.importZip(uri) { progress ->
+                _state.update { it.copy(voskProgress = progress) }
+            }
+            result.fold(
+                onSuccess = { status ->
+                    _state.update {
+                        it.copy(
+                            voskBusy = false,
+                            voskProgress = null,
+                            voskModel = status,
+                            voskMessage = "Wake-word model installed (${status.sizeText}).",
+                        )
+                    }
+                    restartWakeIfRunning()
+                },
+                onFailure = { error ->
+                    _state.update {
+                        it.copy(
+                            voskBusy = false,
+                            voskProgress = null,
+                            voskMessage = "Import failed: ${error.message}",
+                        )
+                    }
+                },
+            )
+        }
+    }
+
+    fun deleteVoskModel() {
+        if (_state.value.voskBusy) return
+        viewModelScope.launch {
+            _state.update { it.copy(voskBusy = true, voskMessage = null) }
+            val deleted = voskModelStore.delete()
+            settingsStore.setWakeNameEnabled(false)
+            _state.update {
+                it.copy(
+                    voskBusy = false,
+                    voskModel = voskModelStore.status(),
+                    voskMessage = if (deleted) {
+                        "Wake-word model removed."
+                    } else {
+                        "Could not remove the wake-word model."
+                    },
+                )
+            }
+            restartWakeIfRunning()
+        }
+    }
+
+    /** The wake service reads settings and model state once at startup. */
+    private suspend fun restartWakeIfRunning() {
+        if (!WakeForegroundService.isRunning) return
+        WakeForegroundService.stop(app)
+        delay(500)
+        WakeForegroundService.start(app)
     }
 
     fun setControlEnabled(enabled: Boolean) {
@@ -239,13 +327,14 @@ class SettingsViewModel(
         private val db: MayaDatabase,
         private val tokenVault: TokenVault,
         private val modelManager: OnDeviceModelManager,
+        private val voskModelStore: VoskModelStore,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             require(modelClass.isAssignableFrom(SettingsViewModel::class.java)) {
                 "Unknown ViewModel: ${modelClass.name}"
             }
-            return SettingsViewModel(app, settingsStore, db, tokenVault, modelManager) as T
+            return SettingsViewModel(app, settingsStore, db, tokenVault, modelManager, voskModelStore) as T
         }
     }
 }

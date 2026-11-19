@@ -12,7 +12,7 @@ from typing import Any
 from custom.server.app import create_app
 from custom.server.auth import RateLimiter, TokenStore
 from custom.server.confirm import ConfirmStore
-from custom.server.contracts import ServerServices, ServerSettings
+from custom.server.contracts import ScreenFrame, ServerServices, ServerSettings
 from custom.server.pair import PairingManager
 from fastapi.testclient import TestClient
 
@@ -117,6 +117,72 @@ class FakePc:
         return {"message": f"done {action}"}
 
 
+class FakeScreen:
+    def __init__(self, error: Exception | None = None) -> None:
+        self.error = error
+        self.calls: list[tuple[int, int]] = []
+
+    def capture(self, *, max_width: int = 1280, quality: int = 60) -> ScreenFrame:
+        self.calls.append((max_width, quality))
+        if self.error:
+            raise self.error
+        return ScreenFrame(b"\xff\xd8fake-jpeg\xff\xd9", "image/jpeg", 640, 360)
+
+
+class FakeInput:
+    def __init__(self, error: Exception | None = None) -> None:
+        self.error = error
+        self.calls: list[list[dict[str, Any]]] = []
+
+    def apply(self, events: list[dict[str, Any]]) -> int:
+        self.calls.append(events)
+        if self.error:
+            raise self.error
+        return len(events)
+
+
+class FakeHybridTask:
+    def __init__(self, task_id: str, description: str, status: str = "queued") -> None:
+        self.id = task_id
+        self.description = description
+        self.status = status
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"id": self.id, "description": self.description, "status": self.status}
+
+
+class FakeHybrid:
+    def __init__(self) -> None:
+        self.controller = "none"
+        self.takeovers = 0
+        self.releases = 0
+        self.tasks: list[FakeHybridTask] = []
+
+    def status(self) -> dict[str, Any]:
+        return {
+            "controller": self.controller,
+            "ai_busy": False,
+            "queued_tasks": len(self.tasks),
+            "running_task": None,
+            "conflicts": 0,
+            "last_takeover": None,
+            "uptime_s": 60,
+        }
+
+    def takeover(self) -> bool:
+        self.takeovers += 1
+        self.controller = "user"
+        return True
+
+    def release(self) -> bool:
+        self.releases += 1
+        self.controller = "none"
+        return True
+
+    def list_tasks(self) -> list[FakeHybridTask]:
+        return list(self.tasks)
+
+
 class FakeMonitor:
     def snapshot(self) -> dict[str, Any]:
         return {
@@ -173,6 +239,9 @@ class Harness:
     pc: FakePc = field(default_factory=FakePc)
     monitor: FakeMonitor = field(default_factory=FakeMonitor)
     wake: FakeWake = field(default_factory=FakeWake)
+    screen: FakeScreen = field(default_factory=FakeScreen)
+    input: FakeInput = field(default_factory=FakeInput)
+    hybrid: FakeHybrid = field(default_factory=FakeHybrid)
     root: Path = Path()
 
 
@@ -183,6 +252,9 @@ def make_harness(
     engine: FakeEngine | None = None,
     voice_available: bool = True,
     pc: FakePc | None = None,
+    screen: FakeScreen | None = None,
+    input_adapter: FakeInput | None = None,
+    hybrid: FakeHybrid | None = None,
     **settings_kwargs: Any,
 ) -> Harness:
     root = tmp_path / "root"
@@ -198,12 +270,18 @@ def make_harness(
     pc = pc or FakePc()
     monitor = FakeMonitor()
     wake = FakeWake()
+    screen = screen or FakeScreen()
+    input_adapter = input_adapter or FakeInput()
+    hybrid = hybrid or FakeHybrid()
     services = ServerServices(
         engine=engine,
         voice=voice,
         pc=pc,
         monitor=monitor,
         wake=wake,
+        screen=screen,
+        input=input_adapter,
+        hybrid=hybrid,
         settings=settings,
         laptop_name="Test-Laptop",
         host="192.168.1.50",
@@ -239,6 +317,9 @@ def make_harness(
         pc=pc,
         monitor=monitor,
         wake=wake,
+        screen=screen,
+        input=input_adapter,
+        hybrid=hybrid,
         root=root,
     )
 

@@ -208,7 +208,7 @@ def test_voice_status_shape(tmp_path) -> None:
 
     assert response.status_code == 200
     body = response.json()
-    assert body["stt"]["engine"] == "vosk"
+    assert body["stt"]["engine"] in {"auto", "vosk", "whisper"}
     assert body["stt"]["available"] is True
     assert body["tts"]["engine"] == "sapi"
     assert body["tts"]["voices"] == ["heera"]

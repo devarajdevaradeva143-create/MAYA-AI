@@ -27,11 +27,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.devaraj.maya.BuildConfig
 import com.devaraj.maya.R
 import com.devaraj.maya.data.prefs.ThemeMode
+import com.devaraj.maya.data.wake.VoskModelStatus
+import com.devaraj.maya.domain.model.OperatingMode
 
 @Composable
 fun SettingsScreen(
@@ -40,6 +43,8 @@ fun SettingsScreen(
     onThemeChange: (ThemeMode) -> Unit,
     connectionMode: String,
     onConnectionModeChange: (String) -> Unit,
+    operatingMode: OperatingMode = OperatingMode.AI,
+    onOperatingModeChange: (OperatingMode) -> Unit = {},
     controlEnabled: Boolean,
     onControlEnabledChange: (Boolean) -> Unit,
     requireUnlock: Boolean,
@@ -53,10 +58,19 @@ fun SettingsScreen(
     onUnloadModel: () -> Unit,
     wakeRunning: Boolean = false,
     onWakeToggle: (Boolean) -> Unit = {},
+    wakeNameEnabled: Boolean = false,
+    onWakeNameChange: (Boolean) -> Unit = {},
+    voskStatus: VoskModelStatus = VoskModelStatus(),
+    voskBusy: Boolean = false,
+    voskProgress: Int? = null,
+    voskMessage: String? = null,
+    onImportVosk: (Uri) -> Unit = {},
+    onDeleteVosk: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var confirmDelete by remember { mutableStateOf(false) }
     var confirmDeleteModel by remember { mutableStateOf(false) }
+    var confirmDeleteVosk by remember { mutableStateOf(false) }
 
     val exportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/json"),
@@ -68,6 +82,12 @@ fun SettingsScreen(
         ActivityResultContracts.OpenDocument(),
     ) { uri: Uri? ->
         if (uri != null) onImportModel(uri)
+    }
+
+    val voskPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri: Uri? ->
+        if (uri != null) onImportVosk(uri)
     }
 
     LaunchedEffect(state.exportStatus) {
@@ -133,6 +153,25 @@ fun SettingsScreen(
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 24.dp))
 
+        Text(text = "Operating mode", style = MaterialTheme.typography.titleMedium)
+        Text(
+            text = "AI = MAYA works alone. REMOTE = you control the laptop. HYBRID = both, you always win.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
+            OperatingMode.values().forEach { mode ->
+                FilterChip(
+                    selected = operatingMode == mode,
+                    onClick = { onOperatingModeChange(mode) },
+                    label = { Text(mode.name) },
+                )
+            }
+        }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 24.dp))
+
         Text(text = "Phone control", style = MaterialTheme.typography.titleMedium)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
             FilterChip(selected = controlEnabled, onClick = { onControlEnabledChange(true) }, label = { Text("On") })
@@ -147,15 +186,76 @@ fun SettingsScreen(
 
         Text(text = "Wake listener", style = MaterialTheme.typography.titleMedium)
         Text(
-            text = "Clap twice to wake Maya. Name detection (\"Maya\" x3) needs a Vosk model (pending).",
+            text = "Clap twice, or say \"Maya\" three times within 10 seconds. Name detection runs fully offline " +
+                "and needs a one-time Vosk model import.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 4.dp),
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
-            FilterChip(selected = wakeRunning, onClick = { onWakeToggle(true) }, label = { Text("On") })
+            FilterChip(selected = wakeRunning, onClick = { onWakeToggle(true) }, label = { Text("On") }, modifier = Modifier.testTag("wake_on"))
             FilterChip(selected = !wakeRunning, onClick = { onWakeToggle(false) }, label = { Text("Off") })
         }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
+            FilterChip(
+                selected = wakeNameEnabled,
+                enabled = voskStatus.installed,
+                onClick = { onWakeNameChange(!wakeNameEnabled) },
+                label = { Text("Name \"Maya\"") },
+            )
+        }
+        Text(
+            text = if (voskStatus.installed) {
+                "Wake-word model ready (${voskStatus.sizeText})."
+            } else {
+                "No wake-word model yet. Download vosk-model-small-en-us-0.15.zip (about 40 MB) " +
+                    "from alphacephei.com/vosk/models and import the zip below."
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+        if (voskBusy) {
+            LinearProgressIndicator(
+                progress = { ((voskProgress ?: 0).coerceIn(0, 100)) / 100f },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+            )
+            Text(
+                text = voskProgress?.let { "Importing... $it%" } ?: "Working...",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
+            OutlinedButton(
+                onClick = {
+                    voskPicker.launch(
+                        arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream"),
+                    )
+                },
+            ) {
+                Text(if (voskStatus.installed) "Replace model (.zip)" else "Import model (.zip)")
+            }
+            if (voskStatus.installed) {
+                TextButton(onClick = { confirmDeleteVosk = true }) { Text("Remove") }
+            }
+        }
+        voskMessage?.let {
+            Text(
+                text = it,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+        }
+        Text(
+            text = "The Vosk model and microphone audio stay on this phone.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 8.dp),
+        )
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 24.dp))
 
@@ -307,6 +407,32 @@ fun SettingsScreen(
             },
             dismissButton = {
                 TextButton(onClick = { confirmDeleteModel = false }) { Text("Cancel") }
+            },
+        )
+    }
+
+    if (confirmDeleteVosk) {
+        AlertDialog(
+            onDismissRequest = { confirmDeleteVosk = false },
+            title = { Text("Remove wake-word model?") },
+            text = {
+                Text(
+                    "Name detection will turn off and the Vosk files are removed from this phone. " +
+                        "Clap detection keeps working.",
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirmDeleteVosk = false
+                        onDeleteVosk()
+                    },
+                ) {
+                    Text("Remove", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDeleteVosk = false }) { Text("Cancel") }
             },
         )
     }

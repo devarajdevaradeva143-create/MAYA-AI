@@ -13,6 +13,8 @@ import com.devaraj.maya.data.remote.SessionState
 import com.devaraj.maya.data.repo.ChatRepository
 import com.devaraj.maya.data.secure.DeviceIdentity
 import com.devaraj.maya.data.secure.TokenVault
+import com.devaraj.maya.data.wake.VoskModelStore
+import com.devaraj.maya.control.hybrid.HybridController
 
 /**
  * Manual dependency container (plan §7: no Hilt/Koin in v1).
@@ -47,6 +49,8 @@ class AppContainer(context: Context) {
 
     val onDeviceModel: OnDeviceModelManager by lazy { OnDeviceModelManager(appContext) }
 
+    val voskModel: VoskModelStore by lazy { VoskModelStore(appContext) }
+
     val pairingRepository: PairingRepository by lazy {
         PairingRepository(
             apiFactory = { host, port -> apiClient.api(host, port) },
@@ -56,6 +60,8 @@ class AppContainer(context: Context) {
             session = session,
         )
     }
+
+    val hybridController: HybridController by lazy { HybridController() }
 
     val connectionRepository: ConnectionRepository by lazy {
         ConnectionRepository(

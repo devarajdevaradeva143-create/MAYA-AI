@@ -50,9 +50,6 @@ from .tools.voice import (
     check_wake,
     wake_reply,
     voice_status,
-    tts_english,
-    tts_tamil,
-    stt,
 )
 from .tools import voice_clap
 from .tools import rag
@@ -432,6 +429,45 @@ def devices_import(
     size = result["bytes"] / 1024
     _echo(f"Imported {result['files']} file(s) into {result['dest']} ({size:.1f} KB)")
     _echo(f"  from paired device: {result['device']}")
+
+
+@devices.command(name="send")
+@click.argument("bundle_path", type=click.Path(exists=True, dir_okay=False))
+@click.option("--host", required=True, help="Receiver IP address.")
+@click.option("--port", default=8765, show_default=True, type=int, help="Receiver port.")
+@click.option("--timeout", default=60.0, show_default=True, type=float, help="Network timeout (s).")
+def devices_send(bundle_path: str, host: str, port: int, timeout: float) -> None:
+    """Send a signed bundle over the LAN (Wi-Fi/USB-tether/BT-PAN)."""
+    from .tools.transport import send_bundle
+
+    result = send_bundle(bundle_path, host, port=port, timeout=timeout)
+    if not result.get("ok"):
+        raise click.ClickException(result.get("error", "send failed"))
+    _echo(f"Sent {result.get('bytes', 0)} bytes to {host}:{port}")
+
+
+@devices.command(name="receive")
+@click.option("--out", "dest_dir", required=True, type=click.Path(), help="Folder to extract into.")
+@click.option("--host", default="0.0.0.0", show_default=True, help="Bind address.")
+@click.option("--port", default=8765, show_default=True, type=int, help="Listen port.")
+@click.option("--timeout", default=120.0, show_default=True, type=float, help="Wait timeout (s).")
+@click.option("--allow-public", is_flag=True, help="Accept non-private (public) clients.")
+def devices_receive(
+    dest_dir: str, host: str, port: int, timeout: float, allow_public: bool
+) -> None:
+    """Receive one signed bundle over the LAN and import it."""
+    from .tools.transport import receive_once
+
+    code = click.prompt("Pairing code", hide_input=True)
+    _echo(f"Listening on {host}:{port} for up to {int(timeout)}s...")
+    result = receive_once(
+        code, dest_dir, host=host, port=port, timeout=timeout, allow_public=allow_public
+    )
+    if not result.get("ok"):
+        raise click.ClickException(result.get("error", "receive failed"))
+    size = int(result.get("bytes", 0)) / 1024
+    _echo(f"Imported {result.get('files', 0)} file(s) into {result.get('dest')} ({size:.1f} KB)")
+    _echo(f"  from paired device: {result.get('device')}")
 
 
 @devices.command()

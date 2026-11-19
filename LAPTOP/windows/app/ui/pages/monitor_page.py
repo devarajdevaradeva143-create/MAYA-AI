@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import logging
 from collections import deque
+from typing import Any
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QThreadPool, QTimer
 from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
@@ -15,6 +17,9 @@ from PySide6.QtWidgets import (
 )
 
 from app.services.monitor_service import MonitorAdapter
+from app.ui.workers import MonitorSnapshotWorker
+
+logger = logging.getLogger("maya.ui.monitor")
 
 
 class MonitorCard(QFrame):
@@ -52,11 +57,23 @@ class MonitorCard(QFrame):
 
 
 class MonitorPage(QWidget):
-    """Maya monitoring page: live system stats cards + disk list + uptime."""
+    """Maya monitoring page: live system stats cards + disk list + uptime.
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    The 2 s timer runs on the UI thread but only *schedules* a snapshot; the
+    WMI/psutil work happens in `MonitorSnapshotWorker`, so ticking never
+    freezes the window. Snapshots are always applied on the UI thread.
+    """
+
+    def __init__(
+        self,
+        parent: QWidget | None = None,
+        *,
+        monitor: MonitorAdapter | None = None,
+    ) -> None:
         super().__init__(parent)
-        self._monitor = MonitorAdapter()
+        self._monitor = monitor if monitor is not None else MonitorAdapter()
+        self._snapshot_busy = False
+        self._snapshot_worker: MonitorSnapshotWorker | None = None
 
         # History for tiny sparklines (last 30 readings)
         self._history: dict[str, deque[float]] = {
@@ -64,11 +81,10 @@ class MonitorPage(QWidget):
             "ram": deque(maxlen=30),
         }
         self._timer = QTimer(self)
-        self._timer.timeout.connect(self._refresh)
+        self._timer.timeout.connect(self._on_tick)
         # timer started in showEvent; stopped in hideEvent (no polling when hidden)
 
         self._build_ui()
-        self._refresh()
 
     # -- ui -----------------------------------------------------------
 
@@ -132,38 +148,64 @@ class MonitorPage(QWidget):
 
     # -- refresh ------------------------------------------------------
 
-    def _refresh(self) -> None:
-        snap = self._monitor.snapshot()
+    def refresh(self) -> None:
+        """Synchronous first/forced refresh (tests and existing callers).
 
+        Blocks briefly while the snapshot is taken; periodic updates go
+        through `_request_snapshot` instead.
+        """
+        self._refresh()
+
+    def _refresh(self) -> None:
+        """Take one snapshot on the calling thread and render it."""
+        try:
+            snapshot = self._monitor.snapshot()
+        except Exception as exc:  # noqa: BLE001 - keep the last good values
+            logger.debug("Monitor snapshot failed: %s", exc)
+            return
+
+        if not isinstance(snapshot, dict):
+            logger.debug("Monitor returned an unexpected snapshot")
+            return
+        self._apply_snapshot(snapshot)
+
+    def _apply_snapshot(self, snap: dict[str, Any]) -> None:
+        """Render a snapshot dict (UI thread only)."""
         # --- Cards ---
-        cpu_pct = snap.get("cpu", {}).get("percent")
+        cpu = snap.get("cpu") or {}
+        ram = snap.get("ram") or {}
+        gpu = snap.get("gpu") or {}
+        npu = snap.get("npu") or {}
+        battery = snap.get("battery") or {}
+
+        cpu_pct = cpu.get("percent")
         cpu_str = f"{cpu_pct}%" if cpu_pct is not None else "—"
         if cpu_pct is not None:
             self._cards["CPU"].update_values("CPU", cpu_str, "█" * int(float(cpu_pct) / 5))
             self._history["cpu"].append(float(cpu_pct))
 
-        ram_pct = snap.get("ram", {}).get("percent")
-        ram_total = snap.get("ram", {}).get("total_gb")
-        ram_used = snap.get("ram", {}).get("used_gb")
+        ram_pct = ram.get("percent")
+        ram_total = ram.get("total_gb")
+        ram_used = ram.get("used_gb")
         ram_str = f"{ram_used}/{ram_total} GB" if ram_total is not None else "—"
         if ram_pct is not None:
             self._cards["RAM"].update_values("RAM", ram_str, "█" * int(float(ram_pct) / 5))
             self._history["ram"].append(float(ram_pct))
 
         # --- GPU ---
-        gpu_name = snap.get("gpu", {}).get("name") or "Unknown GPU"
-        gpu_util = snap.get("gpu", {}).get("percent")
+        gpu_name = gpu.get("name") or "Unknown GPU"
+        gpu_util = gpu.get("percent")
         gpu_str = gpu_name if gpu_util is None else f"{gpu_name} ({gpu_util}%)"
 
         # --- NPU ---
-        npu_name = snap.get("npu", {}).get("name") or "Unknown NPU"
-        npu_util = snap.get("npu", {}).get("percent")
+        npu_name = npu.get("name") or "Unknown NPU"
+        npu_util = npu.get("percent")
         npu_str = npu_name if npu_util is None else f"{npu_name} ({npu_util}%)"
 
         # --- Battery ---
-        bat_pct = snap.get("battery", {}).get("percent")
+        bat_pct = battery.get("percent")
         bat_str = f"{bat_pct}%" if bat_pct is not None else "—"
-        bat_plugged = snap.get("battery", {}).get("plugged")
+        bat_plugged = battery.get("plugged")
         if bat_plugged is not None:
             bat_str += " ⚡" if bat_plugged else " 🔋"
 
@@ -175,7 +217,7 @@ class MonitorPage(QWidget):
             uptime_str = "—"
 
         # --- Disks ---
-        disks = snap.get("disks", [])
+        disks = snap.get("disks") or []
         disk_lines = []
         for d in disks:
             disk_lines.append(
@@ -196,9 +238,51 @@ class MonitorPage(QWidget):
         # Disk list
         self._disk_view.setPlainText(disk_text)
 
+    # -- async snapshot path ------------------------------------------
+
+    def _on_tick(self) -> None:
+        """Timer tick (UI thread): ask for a snapshot without blocking."""
+        self._request_snapshot()
+
+    def _request_snapshot(self) -> bool:
+        """Queue one snapshot on the thread pool; False when one is running."""
+        if self._snapshot_busy:
+            return False
+
+        self._snapshot_busy = True
+        worker = MonitorSnapshotWorker(self._monitor)
+        worker.signals.result.connect(self._on_snapshot)
+        worker.signals.failed.connect(self._on_snapshot_failed)
+        try:
+            QThreadPool.globalInstance().start(worker)
+        except Exception as exc:  # noqa: BLE001 - a busy pool must not freeze the UI
+            self._snapshot_busy = False
+            logger.debug("Could not queue monitor snapshot: %s", exc)
+            return False
+
+        self._snapshot_worker = worker
+        return True
+
+    def _on_snapshot(self, snapshot: object) -> None:
+        """A worker finished (UI thread): render the snapshot, keep the old on error."""
+        self._snapshot_busy = False
+        self._snapshot_worker = None
+        if not isinstance(snapshot, dict):
+            return
+        try:
+            self._apply_snapshot(snapshot)
+        except Exception:  # noqa: BLE001 - a bad snapshot must not crash the page
+            logger.warning("Could not render monitor snapshot", exc_info=True)
+
+    def _on_snapshot_failed(self, message: str) -> None:
+        """A worker failed (UI thread): previous values stay on screen."""
+        self._snapshot_busy = False
+        self._snapshot_worker = None
+        logger.debug("Monitor snapshot failed: %s", message)
+
     def _update_cards_from_snapshot(self) -> None:
         """Initial populating from a first snapshot."""
         try:
-            self._refresh()
+            self.refresh()
         except Exception:
             pass

@@ -52,6 +52,37 @@ class MonitorPort(Protocol):
     def snapshot(self) -> dict[str, Any]: ...
 
 
+@dataclass(frozen=True)
+class ScreenFrame:
+    """One captured frame plus its real pixel size (for phone-side mapping)."""
+
+    data: bytes
+    media_type: str
+    width: int
+    height: int
+
+
+@runtime_checkable
+class ScreenPort(Protocol):
+    def capture(self, *, max_width: int = 1280, quality: int = 60) -> ScreenFrame: ...
+
+
+@runtime_checkable
+class InputPort(Protocol):
+    def apply(self, events: list[dict[str, Any]]) -> int: ...
+
+
+@runtime_checkable
+class HybridPort(Protocol):
+    def status(self) -> Any: ...
+
+    def takeover(self) -> bool: ...
+
+    def release(self) -> bool: ...
+
+    def list_tasks(self) -> list[Any]: ...
+
+
 @runtime_checkable
 class WakePort(Protocol):
     def status(self) -> dict[str, Any]: ...
@@ -98,3 +129,6 @@ class ServerServices:
     engine_name: str = "lemonade"
     persona_prompts: dict[str, str] = field(default_factory=dict)
     started_at: float = field(default_factory=time.time)
+    screen: ScreenPort | None = None
+    input: InputPort | None = None
+    hybrid: HybridPort | None = None

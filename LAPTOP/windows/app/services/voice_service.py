@@ -101,30 +101,46 @@ class VoiceAdapter:
         languages = [lang for lang, present in models.items() if present]
 
         piper_model = self._piper_model("en")
-        piper_available = piper_model is not None
+        piper_available = piper_model is not None or voice_tools.tts_english.is_available()
         sapi_available = info.get("sapi_available", sys.platform == "win32")
+
+        configured = str(self._stt_engine()).lower()
+        if configured == "whisper":
+            engine_label = "whisper"
+        elif configured == "vosk":
+            engine_label = "vosk"
+        else:
+            engine_label = "auto"
 
         return {
             "stt": {
-                "engine": "whisper" if info.get("whisper_available") else "vosk",
-                "available": bool(languages) and (
-                    info.get("vosk_installed") or info.get("whisper_available")
-                ),
+                "engine": engine_label,
+                "configured_engine": configured,
+                "available": bool(languages or info.get("whisper_available")),
                 "languages": languages,
                 "default_lang": self._default_lang,
                 "listen_seconds": self._listen_seconds,
+                "whisper_available": bool(info.get("whisper_available")),
+                "whisper_model": info.get("whisper_model"),
+                "tamil_stt_available": bool(info.get("tamil_stt_available", info.get("whisper_available"))),
             },
             "tts": {
-                "engine": "piper" if piper_available else ("sapi" if sapi_available else "none"),
-                "available": piper_available or sapi_available,
+                "engine": "piper" if (piper_available or voice_tools.tts_tamil.is_available()) else ("sapi" if sapi_available else "none"),
+                "available": piper_available or sapi_available or voice_tools.tts_tamil.is_available(),
                 "voices": self._preferred_voices,
                 "tamil_available": voice_tools.tts_tamil.is_available(),
                 "piper": {
-                    "available": piper_available,
-                    "voices": [piper_model.stem] if piper_model else [],
+                    "available": piper_available or voice_tools.tts_tamil.is_available(),
+                    "voices": [voice_tools.tts_tamil.model_path.stem] if voice_tools.tts_tamil.model_path else ([piper_model.stem] if piper_model else []),
                 },
             },
         }
+
+    def _stt_engine(self) -> str:
+        settings = load_settings()
+        voice = settings.get("voice", {}) if isinstance(settings, dict) else {}
+        stt = voice.get("stt", {}) if isinstance(voice, dict) else {}
+        return str(stt.get("engine", "auto") or "auto")
 
     # -- STT ----------------------------------------------------------
 
@@ -135,13 +151,62 @@ class VoiceAdapter:
         silence) so the UI never fails silently.
         """
         key = _voice_lang_key(lang or self._default_lang)
+        length = self._listen_seconds if seconds is None else int(seconds)
+
+        # Tamil uses Whisper (Vosk has no Tamil model).
+        if key == "ta":
+            if not voice_tools.HAS_WHISPER:
+                raise VoiceError(
+                    "Tamil STT needs faster-whisper. Install it into the app venv."
+                )
+            configured = self._stt_engine()
+            if configured == "vosk":
+                raise VoiceError(
+                    "Tamil needs Whisper; set voice.stt.engine to auto or whisper."
+                )
+            try:
+                wav, _peak = voice_stt.record(seconds=length)
+            except Exception as exc:
+                raise VoiceError(f"Could not record audio: {exc}") from exc
+            try:
+                text = voice_tools.stt.transcribe(wav, language="ta")
+            finally:
+                try:
+                    Path(wav).unlink(missing_ok=True)
+                except OSError:
+                    pass
+            if text.startswith("[STT]"):
+                raise VoiceError(text)
+            result = text.strip()
+            if not result:
+                raise VoiceError("Could not understand the audio — speak closer to the mic.")
+            return result
+
+        configured = self._stt_engine()
+        if configured == "whisper" and voice_tools.HAS_WHISPER:
+            try:
+                wav, _peak = voice_stt.record(seconds=length)
+            except Exception as exc:
+                raise VoiceError(f"Could not record audio: {exc}") from exc
+            try:
+                text = voice_tools.stt.transcribe(wav, language="en")
+            finally:
+                try:
+                    Path(wav).unlink(missing_ok=True)
+                except OSError:
+                    pass
+            if text.startswith("[STT]"):
+                raise VoiceError(text)
+            result = text.strip()
+            if not result:
+                raise VoiceError("Could not understand the audio — speak closer to the mic.")
+            return result
+
         if not voice_stt.available().get(key):
             raise VoiceError(
                 f"No '{key}' speech model installed. "
                 "Add a Vosk model under MAYA AI/Model/models or use English."
             )
-
-        length = self._listen_seconds if seconds is None else int(seconds)
         text, error = voice_stt.listen(seconds=length, lang=key)
         if error:
             raise VoiceError(error)
@@ -166,8 +231,11 @@ class VoiceAdapter:
     def transcribe(self, wav_path: Path, lang: str) -> dict[str, Any]:
         key = _voice_lang_key(lang)
 
-        if voice_tools.stt.is_available():
-            text = voice_tools.stt.transcribe(str(wav_path))
+        configured = self._stt_engine()
+        use_whisper = (key == "ta") or (configured in {"whisper", "auto"} and voice_tools.HAS_WHISPER)
+
+        if use_whisper and voice_tools.HAS_WHISPER:
+            text = voice_tools.stt.transcribe(str(wav_path), language=key if key == "ta" else "en")
             if text.startswith("[STT]"):
                 raise RuntimeError(text)
             return {"text": text.strip(), "lang": lang, "engine": "whisper"}
@@ -343,30 +411,13 @@ class VoiceAdapter:
         return self._valid_wav(target)
 
     def _piper_wav(self, text: str, lang: str, target: Path) -> bool:
-        model = self._piper_model(lang)
-        if model is None:
+        # Use the piper Python API (the 1.8 CLI is broken for file output).
+        key = _voice_lang_key(lang)
+        tts = voice_tools.tts_tamil if key == "ta" else voice_tools.tts_english
+        if not tts.is_available():
             return False
-        executable = self._piper_command()
-        if executable is None:
-            return False
-
-        try:
-            completed = subprocess.run(
-                [
-                    *executable,
-                    "--model",
-                    str(model),
-                    "--output_file",
-                    str(target),
-                ],
-                input=text,
-                capture_output=True,
-                text=True,
-                timeout=SAPI_TIMEOUT_S,
-            )
-        except (OSError, subprocess.SubprocessError):
-            return False
-        if completed.returncode != 0 or not target.is_file():
+        err = tts.synthesize_wav(text, target)
+        if err:
             return False
         return self._valid_wav(target)
 

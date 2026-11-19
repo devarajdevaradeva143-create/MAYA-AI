@@ -54,9 +54,14 @@ class PairingViewModel(
     init {
         viewModelScope.launch {
             val settings = settingsStore.settings.first()
+            val preferredHost = if (settings.connectionMode == "usb") {
+                "127.0.0.1"
+            } else {
+                settings.laptopHost
+            }
             _state.update { current ->
-                if (current.host.isBlank() && settings.laptopHost.isNotBlank()) {
-                    current.copy(host = settings.laptopHost, port = settings.laptopPort.toString())
+                if (current.host.isBlank() && preferredHost.isNotBlank()) {
+                    current.copy(host = preferredHost, port = settings.laptopPort.toString())
                 } else {
                     current
                 }
@@ -180,7 +185,10 @@ class PairingViewModel(
         result.fold(
             onSuccess = { device ->
                 discoveryJob?.cancel()
-                settingsStore.setLaptop(device.host, device.port)
+                val mode = settingsStore.settings.first().connectionMode
+                if (mode != "usb") {
+                    settingsStore.setLaptop(device.host, device.port)
+                }
                 _state.update {
                     it.copy(
                         step = PairingStep.SUCCESS,
@@ -191,7 +199,10 @@ class PairingViewModel(
                     )
                 }
                 // Health check is best-effort; the Laptop tab exposes retry.
-                connectionRepository.connect(device)
+                connectionRepository.connect(
+                    device,
+                    hostOverride = if (mode == "usb") "127.0.0.1" else null,
+                )
             },
             onFailure = { error ->
                 val mapped = error as? MayaApiException

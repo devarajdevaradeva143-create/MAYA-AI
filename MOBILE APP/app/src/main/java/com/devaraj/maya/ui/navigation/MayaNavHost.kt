@@ -8,6 +8,7 @@ import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Smartphone
 import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -30,6 +31,7 @@ import com.devaraj.maya.ui.chat.ChatViewModel
 import com.devaraj.maya.ui.components.PlaceholderScreen
 import com.devaraj.maya.ui.laptop.LaptopControlViewModel
 import com.devaraj.maya.ui.laptop.LaptopScreen
+import com.devaraj.maya.ui.laptop.RemoteViewModel
 import com.devaraj.maya.ui.monitor.MonitorScreen
 import com.devaraj.maya.ui.monitor.MonitorViewModel
 import com.devaraj.maya.ui.phone.PhoneScreen
@@ -65,6 +67,8 @@ fun MayaNavHost(
     onConnect: () -> Unit,
     onForget: () -> Unit,
     onToggleAutoConnect: (Boolean) -> Unit,
+    wakeRequest: Int = 0,
+    onWakeConsumed: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -110,6 +114,13 @@ fun MayaNavHost(
             val voiceViewModel: VoiceViewModel = viewModel(factory = voiceFactory)
             val voiceState by voiceViewModel.state.collectAsStateWithLifecycle()
 
+            LaunchedEffect(wakeRequest) {
+                if (wakeRequest > 0) {
+                    voiceViewModel.startListening()
+                    onWakeConsumed()
+                }
+            }
+
             VoiceScreen(
                 state = voiceState,
                 onStartListening = voiceViewModel::startListening,
@@ -127,6 +138,16 @@ fun MayaNavHost(
             val controlVm: LaptopControlViewModel = viewModel(factory = controlFactory)
             val controlState by controlVm.state.collectAsStateWithLifecycle()
 
+            val remoteFactory = remember(app) {
+                RemoteViewModel.Factory(
+                    connectionRepository = app.container.connectionRepository,
+                    apiClient = app.container.apiClient,
+                    context = app.applicationContext,
+                )
+            }
+            val remoteVm: RemoteViewModel = viewModel(factory = remoteFactory)
+            val appSettings by app.container.settingsStore.settings.collectAsStateWithLifecycle(initialValue = com.devaraj.maya.data.prefs.MayaSettings())
+
             LaptopScreen(
                 connectionState = connectionState,
                 devices = devices,
@@ -135,6 +156,8 @@ fun MayaNavHost(
                 onForget = onForget,
                 onToggleAutoConnect = onToggleAutoConnect,
                 controlState = controlState,
+                operatingMode = appSettings.operatingMode,
+                remoteViewModel = remoteVm,
                 onControlAppNameChange = controlVm::setAppName,
                 onControlVolumeChange = controlVm::setVolumeLevel,
                 onControlClipboardChange = controlVm::setClipboardText,
@@ -223,6 +246,7 @@ fun MayaNavHost(
                     db = app.container.database,
                     tokenVault = app.container.tokenVault,
                     modelManager = app.container.onDeviceModel,
+                    voskModelStore = app.container.voskModel,
                 )
             }
             val settingsVm: SettingsViewModel = viewModel(factory = settingsFactory)
@@ -236,6 +260,8 @@ fun MayaNavHost(
                 onThemeChange = onThemeChange,
                 connectionMode = appSettings.connectionMode,
                 onConnectionModeChange = settingsVm::setConnectionMode,
+                operatingMode = appSettings.operatingMode,
+                onOperatingModeChange = settingsVm::setOperatingMode,
                 controlEnabled = appSettings.controlEnabled,
                 onControlEnabledChange = settingsVm::setControlEnabled,
                 requireUnlock = appSettings.controlRequireUnlock,
@@ -252,6 +278,14 @@ fun MayaNavHost(
                     if (enabled) com.devaraj.maya.service.WakeForegroundService.start(app)
                     else com.devaraj.maya.service.WakeForegroundService.stop(app)
                 },
+                wakeNameEnabled = appSettings.wakeNameEnabled,
+                onWakeNameChange = settingsVm::setWakeName,
+                voskStatus = settingsState.voskModel,
+                voskBusy = settingsState.voskBusy,
+                voskProgress = settingsState.voskProgress,
+                voskMessage = settingsState.voskMessage,
+                onImportVosk = settingsVm::importVoskModel,
+                onDeleteVosk = settingsVm::deleteVoskModel,
             )
         }
     }

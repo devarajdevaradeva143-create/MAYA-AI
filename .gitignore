@@ -23,6 +23,8 @@ MAYA AI/security/*.json
 MAYA AI/Model/
 MAYA AI/voice/*.onnx
 MAYA AI/voice/*.onnx.json
+MAYA AI/voice/**/*.onnx
+MAYA AI/voice/**/*.onnx.json
 *.gguf
 *.safetensors
 *.bin
@@ -55,6 +57,9 @@ logs*.txt
 
 # Runtime settings backups (personal)
 MAYA AI/config/backups/
+
+# PIN / security backups (personal) — never commit
+JARVIS/backups/security*
 
 # Vendored git repo (llama.cpp) — keep submodule-free
 MOBILE APP/app/src/main/cpp/llama.cpp/

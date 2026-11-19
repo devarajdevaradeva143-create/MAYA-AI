@@ -10,15 +10,32 @@ from custom.server.models import API_VERSION, HealthResponse
 
 router = APIRouter(tags=["health"])
 
-CAPABILITIES = [
+BASE_CAPABILITIES = [
     "chat",
     "chat_stream",
     "voice_stt",
     "voice_tts",
     "pc_control",
+    "file_transfer",
     "wake",
     "monitor",
 ]
+
+
+def _available(port: object) -> bool:
+    check = getattr(port, "available", None)
+    return True if check is None else bool(check())
+
+
+def capabilities_for(services) -> list[str]:  # noqa: ANN001 - ServerServices
+    caps = list(BASE_CAPABILITIES)
+    if services.screen is not None and _available(services.screen):
+        caps.append("screen")
+    if services.input is not None and _available(services.input):
+        caps.append("remote_input")
+    if services.hybrid is not None:
+        caps.append("hybrid")
+    return caps
 
 
 @router.get("/health", response_model=HealthResponse)
@@ -37,7 +54,7 @@ def health(request: Request) -> HealthResponse:
         platform=services.platform,
         model=services.model,
         engine=services.engine_name,
-        capabilities=CAPABILITIES,
+        capabilities=capabilities_for(services),
         paired_devices=paired,
         uptime_s=max(0, int(time.time() - services.started_at)),
     )

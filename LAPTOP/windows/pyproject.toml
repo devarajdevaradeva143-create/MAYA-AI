@@ -20,6 +20,9 @@ dependencies = [
     "send2trash==1.8.3",
     "pystray==0.19.5",
     "vosk==0.3.45",
+    "piper-tts==1.8.0",
+    "faster-whisper==1.2.1",
+    "av==18.1.0",
     "pywin32>=312",
 ]
 
