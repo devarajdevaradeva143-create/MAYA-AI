@@ -51,7 +51,7 @@
 | 3 | Phase 11 USB/BT manual test | Not run |
 | 4 | Phase 12 instrumented tests | `androidTest` folder missing |
 | 5 | Model switch to tamil-lm-2b | Deferred by user (currently Qwen3 1.7B) |
-| 6 | WhatsApp send — manual phone test | APK rebuilt 19-11 07:54 (`app-release.apk`); number `+`/spaces fix + WhatsApp Business detect added. Test: Phone tab → WhatsApp → confirm → send |
+| 6 | WhatsApp send — manual phone test | ✅ Verified 19-11 on Infinix X6857B (Android 16): confirm dialog → WhatsApp Conversation opens with message prefilled; Send pressed by user. Send not auto-pressed by design |
 | 7 | Maya AI-drafted WhatsApp message | Not implemented (idea: chat reply → "Send to WhatsApp" prefill) |
 
 ## 4. Cross-cutting pending (laptop + Fedora)
