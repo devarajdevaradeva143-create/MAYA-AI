@@ -15,7 +15,8 @@ __pycache__/
 MAYA AI/logs/
 MAYA AI/memory/
 MAYA AI/security/*.json
-DEVARAJ/
+# Personal folder — anchored to repo root only (NOT com/devaraj/ Kotlin package)
+/DEVARAJ/
 .opencode/
 
 # Heavy / generated binaries (not source)

@@ -51,6 +51,8 @@
 | 3 | Phase 11 USB/BT manual test | Not run |
 | 4 | Phase 12 instrumented tests | `androidTest` folder missing |
 | 5 | Model switch to tamil-lm-2b | Deferred by user (currently Qwen3 1.7B) |
+| 6 | WhatsApp send — manual phone test | APK rebuilt 19-11 07:54 (`app-release.apk`); number `+`/spaces fix + WhatsApp Business detect added. Test: Phone tab → WhatsApp → confirm → send |
+| 7 | Maya AI-drafted WhatsApp message | Not implemented (idea: chat reply → "Send to WhatsApp" prefill) |
 
 ## 4. Cross-cutting pending (laptop + Fedora)
 
@@ -79,6 +81,8 @@
 - Phone server auto-start wired (Settings checkbox)
 - Git initialized + first commit pushed (`11444d7` → `origin/main`)
 - `JARVIS\OpenJarvis\` untouched (clean)
+- Engine venv repaired 19-11: `.venv-engine` editable link pointed to deleted `maya-maya\OpenJarvis` → reinstalled from current path; `import openjarvis` + `jarvis --version` OK; JARVIS tests 333 passed / 1 skipped
+- `.gitignore` fix 19-11: `DEVARAJ/` was unanchored → ignored `com/devaraj/` Kotlin package (mobile source never committed); now `/DEVARAJ/`, mobile source tracked
 
 ## 7. Known issues / pitfalls
 
