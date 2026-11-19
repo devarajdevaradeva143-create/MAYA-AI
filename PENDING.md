@@ -85,6 +85,7 @@
 - `.gitignore` fix 19-11: `DEVARAJ/` was unanchored → ignored `com/devaraj/` Kotlin package (mobile source never committed); now `/DEVARAJ/`, mobile source tracked
 - PC Control page 19-11: display labels were passed straight to `ControlService` (every action failed with "Unsupported action"); added `ACTION_IDS` label→id map, `ConfirmDialog` was a `QWidget` with no `setModal` + `setContentsMargens` typo (crashed), audit signal now connected
 - WhatsApp (laptop) 19-11: `whatsapp.message` action — confirm dialog → opens WhatsApp Desktop with `whatsapp://send?phone=…&text=…` prefilled (browser `wa.me` fallback); user presses Send. Tests: +9 (`tests/test_whatsapp.py`)
+- Phone ↔ laptop pairing 19-11: Infinix X6857B paired to `10.87.222.204:8420` over the phone's hotspot (manual IP; mDNS not used). Phone Laptop tab shows "Connected to SELVA-KUMAR" + capabilities; laptop `/api/v1/health` reports `paired_devices: 2` (this phone + an older test token). End-to-end chat verified from the phone: "hii" → laptop reply rendered with a `Laptop` badge. Headless server run with `python -u -m app --headless` so the one-time PIN is visible in stdout; PIN is valid 120 s
 
 ## 7. Known issues / pitfalls
 
