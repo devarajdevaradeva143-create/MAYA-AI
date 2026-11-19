@@ -64,6 +64,7 @@ fun ChatScreen(
     onDeleteChat: () -> Unit,
     onPersonaChange: (String) -> Unit,
     onDismissError: () -> Unit,
+    onSendToWhatsApp: (String) -> String = { "" },
     modifier: Modifier = Modifier,
 ) {
     var input by rememberSaveable { mutableStateOf("") }
@@ -160,7 +161,7 @@ fun ChatScreen(
                 }
             }
             items(state.messages, key = { it.id }) { message ->
-                MessageBubble(message = message, onRetry = onRetry)
+                MessageBubble(message = message, onRetry = onRetry, onSendToWhatsApp = onSendToWhatsApp)
             }
         }
 
@@ -215,8 +216,13 @@ fun ChatScreen(
 }
 
 @Composable
-private fun MessageBubble(message: Message, onRetry: () -> Unit) {
+private fun MessageBubble(
+    message: Message,
+    onRetry: () -> Unit,
+    onSendToWhatsApp: (String) -> Unit,
+) {
     val isUser = message.role == MessageRole.USER
+    val isAssistant = message.role == MessageRole.MAYA || message.role == MessageRole.ASSISTANT
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -264,19 +270,19 @@ private fun MessageBubble(message: Message, onRetry: () -> Unit) {
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            if (!isUser && message.content.isNotBlank()) {
+            if (isAssistant && message.content.isNotBlank()) {
                 val context = LocalContext.current
                 TextButton(onClick = {
+                    val url = onSendToWhatsApp(message.content)
                     try {
-                        val encoded = URLEncoder.encode(message.content, StandardCharsets.UTF_8.toString())
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/?text=$encoded"))
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
                         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                         context.startActivity(intent)
                     } catch (e: Exception) {
                         Toast.makeText(context, "WhatsApp not available", Toast.LENGTH_SHORT).show()
                     }
                 }) {
-                    Text(text = "Share to WhatsApp", style = MaterialTheme.typography.labelSmall)
+                    Text(text = "Send to WhatsApp", style = MaterialTheme.typography.labelSmall)
                 }
             }
             if (message.status == MessageStatus.FAILED) {

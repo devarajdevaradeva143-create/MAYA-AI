@@ -10,7 +10,10 @@ import pytest
 
 from custom.tools.language import (
     UNAVAILABLE_PREFIX,
+    _translation_cache,
+    clear_translation_cache,
     detect_language,
+    transliterate,
     translate,
     translate_english_to_tamil,
     translate_tamil_to_english,
@@ -196,3 +199,71 @@ def test_detect_tanglish() -> None:
 def test_detect_blank_or_symbol_only_is_unknown() -> None:
     assert detect_language("   ")["primary"] == "unknown"
     assert detect_language("12345 !!!")["primary"] == "unknown"
+
+
+# ── Hindi support ────────────────────────────────────────────────────────
+
+def test_translate_hindi_to_english() -> None:
+    engine = FakeEngine("Hello")
+    result = translate("नमस्ते", "en", source_lang="hi", engine=engine)
+    assert result == "Hello"
+    prompt = _only_prompt(engine)
+    assert "Hindi" in prompt
+    assert "English" in prompt
+
+
+def test_detect_hindi() -> None:
+    assert detect_language("नमस्ते दुनिया")["primary"] == "hi"
+
+
+# ── Transliteration ──────────────────────────────────────────────────────
+
+def test_transliterate_tamil_to_latin() -> None:
+    out = transliterate("வணக்கம்", "tamil", "latin")
+    assert isinstance(out, str)
+    assert out.isascii()
+    assert len(out) > 0
+
+
+def test_transliterate_latin_to_tamil() -> None:
+    out = transliterate("vanakkam", "latin", "tamil")
+    assert isinstance(out, str)
+    assert len(out) > 0
+
+
+def test_transliterate_hindi_to_latin() -> None:
+    out = transliterate("नमस्ते", "hi", "lat")
+    assert isinstance(out, str)
+    assert out.isascii()
+
+
+def test_transliterate_flexible_kwargs() -> None:
+    out = transliterate("வணக்கம்", source_script="tamil", target_script="latin")
+    assert isinstance(out, str) and out.isascii()
+    out2 = transliterate("வணக்கம்", from_script="ta", to_script="lat")
+    assert isinstance(out2, str) and out2.isascii()
+
+
+def test_transliterate_infer_source() -> None:
+    out = transliterate("வணக்கம்")
+    assert isinstance(out, str) and out.isascii()
+
+
+# ── LRU cache ────────────────────────────────────────────────────────────
+
+def test_translation_cache_hit_avoids_engine() -> None:
+    clear_translation_cache()
+    engine = FakeEngine("Hello")
+    assert translate("வணக்கம்", "en", "tamil", engine=engine) == "Hello"
+    assert len(engine.calls) == 1
+    # second call should use cache
+    assert translate("வணக்கம்", "en", "tamil", engine=engine) == "Hello"
+    assert len(engine.calls) == 1
+
+
+def test_translation_cache_eviction() -> None:
+    clear_translation_cache()
+    for i in range(105):
+        engine = FakeEngine(f"out{i}")
+        translate(f"text{i}", "en", "tamil", engine=engine)
+    assert len(_translation_cache) <= 100

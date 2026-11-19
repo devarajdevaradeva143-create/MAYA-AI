@@ -80,6 +80,10 @@ def server_settings(raw: dict[str, Any] | None = None) -> ServerSettings:
         if isinstance(root, str) and root.strip():
             roots.append(root.strip())
 
+    wan_cfg = server_cfg.get("wan") or {}
+    if not isinstance(wan_cfg, dict):
+        wan_cfg = {}
+
     return ServerSettings(
         host=str(server_cfg.get("host", DEFAULT_HOST)),
         port=_as_int(server_cfg.get("port", DEFAULT_PORT), DEFAULT_PORT, 1, 65535),
@@ -92,6 +96,9 @@ def server_settings(raw: dict[str, Any] | None = None) -> ServerSettings:
         max_devices=_as_int(server_cfg.get("max_devices", 8), 8, 1, 32),
         allowed_roots=roots,
         enabled=_as_bool(server_cfg.get("enabled", True), True),
+        wan_enabled=_as_bool(wan_cfg.get("enabled", False), False),
+        wan_relay_url=str(wan_cfg.get("relay_url", "") or ""),
+        wan_cert_path=str(wan_cfg.get("cert_path", "") or ""),
     )
 
 

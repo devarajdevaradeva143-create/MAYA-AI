@@ -26,6 +26,7 @@ import tempfile
 import time
 
 from ..config import PROJECT_ROOT, load_settings
+from custom.tools import bundle_crypto
 
 
 ENV_DEVICES_STORE = "MAYA_DEVICES_STORE"
@@ -803,6 +804,7 @@ def export_bundle(
     sources: List[str],
     out_path: str,
     allow_sensitive: bool = False,
+    encrypted: bool = False,
 ) -> Dict[str, Any]:
     """Write an HMAC-signed JSON bundle for a paired device.
 
@@ -852,7 +854,12 @@ def export_bundle(
         )
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as handle:
-                json.dump(fields, handle, ensure_ascii=False, indent=2)
+                if encrypted:
+                    inner = json.dumps(fields, ensure_ascii=False, indent=2).encode("utf-8")
+                    envelope = bundle_crypto.encrypt_envelope(inner, code, seq=int(time.time()))
+                    json.dump(envelope, handle, ensure_ascii=False, indent=2)
+                else:
+                    json.dump(fields, handle, ensure_ascii=False, indent=2)
                 handle.flush()
                 os.fsync(handle.fileno())
             os.chmod(tmp_name, 0o600)
@@ -873,6 +880,7 @@ def export_bundle(
         "files": len(fields["files"]),
         "bytes": collected["bytes"],
         "out": str(out),
+        "encrypted": bool(encrypted),
     }
 
 
@@ -899,11 +907,28 @@ def import_bundle(
                 "code": "too_large",
                 "error": f"Bundle file is larger than the {max_bytes // (1024 * 1024)} MB limit allows.",
             }
-        raw_text = path.read_text(encoding="utf-8")
+        raw_bytes = path.read_bytes()
     except FileNotFoundError:
         return {"ok": False, "code": "bundle_not_found", "error": f"Bundle not found: {bundle_path}"}
     except OSError as exc:
         return {"ok": False, "code": "bad_bundle", "error": f"Could not read bundle: {exc}"}
+
+    envelope_seq: int | None = None
+    try:
+        if bundle_crypto.is_envelope(raw_bytes):
+            try:
+                envelope = json.loads(raw_bytes.decode("utf-8"))
+            except (ValueError, UnicodeDecodeError):
+                return {"ok": False, "code": "bad_bundle", "error": "Bundle is not valid JSON."}
+            try:
+                raw_bytes = bundle_crypto.decrypt_envelope(envelope, code, allow_replay=allow_replay)
+                envelope_seq = int(envelope.get("enc", {}).get("seq", -1))
+            except ValueError as exc:
+                code_name = "replay" if "replay" in str(exc) else "bad_bundle"
+                return {"ok": False, "code": code_name, "error": str(exc)}
+        raw_text = raw_bytes.decode("utf-8")
+    except (ValueError, UnicodeDecodeError):
+        return {"ok": False, "code": "bad_bundle", "error": "Bundle is not valid UTF-8."}
 
     try:
         bundle = json.loads(raw_text)
@@ -1107,6 +1132,9 @@ def import_bundle(
             _save_nonces({"version": 1, "seen": seen})
         except OSError:
             pass
+
+    if envelope_seq is not None:
+        bundle_crypto.commit_sequence(envelope_seq)
 
     return {
         "ok": True,

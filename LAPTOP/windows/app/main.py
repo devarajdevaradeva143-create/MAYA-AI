@@ -42,7 +42,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--tray",
         action="store_true",
-        help="start minimized to the system tray",
+        help="start minimized to the system tray (shows window on demand)",
+    )
+    parser.add_argument(
+        "--tray-only",
+        action="store_true",
+        help="start only the system tray icon (no main window, for autostart)",
     )
     parser.add_argument("--version", action="version", version=f"Maya AI {__version__}")
     return parser.parse_args(argv)
@@ -79,8 +84,14 @@ def _make_tray_icon(icon_name: str = "Maya") -> pystray.Icon:
     return pystray.Icon(icon_name, img, title="Maya AI")
 
 
-def run_gui(argv: Sequence[str] | None = None, start_hidden: bool = False) -> int:
-    """Start the Qt app. Returns the process exit code."""
+def run_gui(argv: Sequence[str] | None = None, start_hidden: bool = False, tray_only: bool = False) -> int:
+    """Start the Qt app. Returns the process exit code.
+
+    Args:
+        argv: Command-line arguments.
+        start_hidden: Start with main window hidden (minimized to tray).
+        tray_only: Start only the system tray icon, no main window at all (for autostart).
+    """
     logger = setup_logging()
     install_excepthook(logger)
     logger.info("Starting Maya AI desktop %s", __version__)
@@ -119,10 +130,12 @@ def run_gui(argv: Sequence[str] | None = None, start_hidden: bool = False) -> in
         if lock.exec() != QDialog.DialogCode.Accepted:
             return 0
 
-    _main_window = MayaMainWindow(
-        repository=repository, theme=theme, security=security,
-        tray_available=HAS_PYSTRAY,
-    )
+    # In tray-only mode, don't create the main window at all
+    if not tray_only:
+        _main_window = MayaMainWindow(
+            repository=repository, theme=theme, security=security,
+            tray_available=HAS_PYSTRAY,
+        )
 
     # --- Tray setup ---
     tray_icon = _make_tray_icon("Maya AI")
@@ -155,7 +168,7 @@ def run_gui(argv: Sequence[str] | None = None, start_hidden: bool = False) -> in
 
     instance.activated.connect(_on_activated)
 
-    if not start_hidden:
+    if not start_hidden and not tray_only:
         _main_window.show()
 
     # Optional phone-server auto-start (Settings -> "Start phone server with Maya").
@@ -209,6 +222,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
     if args.headless:
         return run_headless()
+    if args.tray_only:
+        return run_gui(start_hidden=True, tray_only=True)
     if args.tray:
         return run_gui(start_hidden=True)
 

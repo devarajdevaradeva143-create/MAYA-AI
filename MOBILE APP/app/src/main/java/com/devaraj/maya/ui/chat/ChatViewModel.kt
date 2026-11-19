@@ -1,5 +1,7 @@
 package com.devaraj.maya.ui.chat
 
+import android.content.Intent
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -17,6 +19,8 @@ import com.devaraj.maya.domain.model.AiSource
 import com.devaraj.maya.domain.model.Message
 import com.devaraj.maya.domain.model.MessageRole
 import com.devaraj.maya.domain.model.MessageStatus
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -162,7 +166,7 @@ class ChatViewModel(
         val requestMessages = history.mapNotNull { message ->
             when (message.role) {
                 MessageRole.USER -> ChatMessageDto("user", message.content)
-                MessageRole.MAYA -> if (message.content.isNotBlank()) {
+                MessageRole.MAYA, MessageRole.ASSISTANT -> if (message.content.isNotBlank()) {
                     ChatMessageDto("assistant", message.content)
                 } else {
                     null
@@ -362,7 +366,7 @@ class ChatViewModel(
         val conversationId = _state.value.conversationId ?: return
         if (_state.value.streaming) return
         val failed = _state.value.messages.lastOrNull {
-            it.role == MessageRole.MAYA && it.status == MessageStatus.FAILED
+            (it.role == MessageRole.MAYA || it.role == MessageRole.ASSISTANT) && it.status == MessageStatus.FAILED
         } ?: return
         viewModelScope.launch {
             chatRepository.deleteMessage(failed.id)
@@ -404,6 +408,14 @@ class ChatViewModel(
         _state.update { it.copy(errorReason = null, errorMessage = null) }
     }
 
+    /**
+     * Creates a WhatsApp share URL for the given message text.
+     * Returns the wa.me URL with properly URL-encoded text. The user still
+     * chooses the contact and presses Send (no auto-send).
+     * Handles special characters, newlines, and emojis.
+     */
+    fun sendToWhatsApp(message: String): String = Companion.sendToWhatsApp(message)
+
     override fun onCleared() {
         if (_state.value.localGenerating) modelManager.cancel()
         socket.close()
@@ -430,5 +442,14 @@ class ChatViewModel(
         private const val FLUSH_INTERVAL_MS = 250L
         private const val SOCKET_WAIT_MS = 3_000L
         private const val LOCAL_MODEL_NAME = "Qwen3 1.7B Q4_K_M"
+
+        /**
+         * Pure helper: builds the wa.me URL with properly URL-encoded text.
+         * Handles special characters, newlines, and emojis.
+         */
+        fun sendToWhatsApp(message: String): String {
+            val encoded = URLEncoder.encode(message, StandardCharsets.UTF_8.toString())
+            return "https://wa.me/?text=$encoded"
+        }
     }
 }

@@ -839,3 +839,35 @@ data\remote\
 |---|---|---|
 | v1 | 2026-11-17 | Initial contract — pairing, chat, voice, PC control, events, wake |
 | v1.1 | 2026-11-19 | Additive: remote session + screen + input + file transfer + hybrid status/takeover |
+| v1.2 | 2026-11-19 | Additive: WAN remote capability (`wan_host`, `wan` capability) — design only |
+
+---
+
+## 18. WAN remote (design only)
+
+Internet remote control is **not enabled by default**. When configured, the
+laptop advertises a stable address and TLS is mandatory.
+
+### `GET /health` additions
+
+```json
+{
+  "capabilities": ["chat", "...", "wan"],
+  "wan_host": "100.x.y.z"
+}
+```
+
+- `wan` appears in `capabilities` only when `server.wan.enabled` is true.
+- `wan_host` is the stable address (Tailscale IP / relay address) or `null`.
+
+### Rules
+
+- WAN transport is TLS only; cleartext HTTP is refused.
+- The same pairing token is required; WAN does not weaken auth.
+- Relay (if used) only tunnels framed bytes; it cannot read control payloads.
+- Config: `server.wan.enabled`, `server.wan.relay_url`, `server.wan.mode`
+  (`lan` | `wan`), `server.wan.cert_path`, `server.wan.key_path`.
+- Design: `docs/WAN-REMOTE-DESIGN.md`.
+
+> Implementation status: `wan_relay.py` + `tls.py` are compilable skeletons.
+> No relay is deployed and no certs are provisioned.

@@ -24,6 +24,7 @@ class HealthResponse(BaseModel):
     capabilities: list[str] = Field(default_factory=list)
     paired_devices: int = 0
     uptime_s: int = 0
+    wan_host: str | None = None
 
 
 class PairClaimRequest(BaseModel):

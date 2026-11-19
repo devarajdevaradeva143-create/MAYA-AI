@@ -100,6 +100,7 @@ fun MayaNavHost(
                 onDeleteChat = chatViewModel::deleteChat,
                 onPersonaChange = chatViewModel::setPersona,
                 onDismissError = chatViewModel::clearError,
+                onSendToWhatsApp = chatViewModel::sendToWhatsApp,
             )
         }
         composable(Routes.VOICE) {

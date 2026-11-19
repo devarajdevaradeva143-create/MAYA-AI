@@ -1,6 +1,6 @@
 package com.devaraj.maya.domain.model
 
-enum class MessageRole { USER, MAYA, SYSTEM }
+enum class MessageRole { USER, MAYA, ASSISTANT, SYSTEM }
 
 enum class MessageStatus { SENDING, STREAMING, SENT, FAILED, STOPPED }
 

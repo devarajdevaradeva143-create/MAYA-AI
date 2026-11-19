@@ -41,6 +41,7 @@ data class MayaSettings(
     val connectionMode: String = "wifi",
     val wakeNameEnabled: Boolean = false,
     val operatingMode: OperatingMode = OperatingMode.AI,
+    val voiceBiometricsEnabled: Boolean = false,
 ) {
     companion object {
         const val DEFAULT_PORT = 8420
@@ -64,6 +65,7 @@ class SettingsStore(private val context: Context) {
         val CONNECTION_MODE = stringPreferencesKey("connection_mode")
         val WAKE_NAME_ENABLED = booleanPreferencesKey("wake_name_enabled")
         val OPERATING_MODE = stringPreferencesKey("operating_mode")
+        val VOICE_BIOMETRICS_ENABLED = booleanPreferencesKey("voice_biometrics_enabled")
     }
 
     val settings: Flow<MayaSettings> = context.mayaDataStore.data

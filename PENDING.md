@@ -1,6 +1,6 @@
 # MAYA AI — Pending Work List
 
-> Last updated: 18 Nov 2026
+> Last updated: 19 Nov 2026
 > Scope: everything in `MAYA AI PROJECT\` that is not yet done.
 > Companion: `docs/HANDOFF.md` (current state), `docs/ROADMAP.md` (phase plan).
 
@@ -20,17 +20,8 @@
 
 | # | Item | What's needed | Effort |
 |---|---|---|---|
-| 1 | OS-level autostart (boot-la Maya auto-start) | Registry write + tray-only launch wiring; `install_autostart.ps1` exists but not wired | **Pending** (user choice) |
-| 2 | Tamil TTS | Piper Tamil voice installed; Python API (CLI broken). ✅ Done | Done |
-| 3 | Tamil STT | faster-whisper small model; lazy load; Tamil routing. ✅ Done | Done |
-| 4 | Language Intelligence (translation) | `translate()` via local engine; detect/phonetic kept. ✅ Done | Done |
-| 5 | English Teacher — AI lessons | AI-generated lessons + progress persistence + fallback. ✅ Done | Done |
-| 6 | Voiceprint enrollment wizard | In-app wizard replaces CLI. ✅ Done | Done |
-| 7 | Windows Hello enrollment | By design (Windows Settings). ✅ Done | By design |
-| 8 | Monitor WMI temp | Async snapshot on QThreadPool; no UI freeze. ✅ Done | Done |
-| 9 | Server Start button blocks UI | Async start via QThread. ✅ Done | Done |
-| 10 | Multi-device live transport | LAN send/receive + nonce anti-replay. ✅ Done | Done |
-| 11 | PIN not set confirmation | User action | User |
+| 1 | OS-level autostart (boot-la Maya auto-start) | Registry write + tray-only launch wiring; `install_autostart.ps1` exists but not wired. **User asked to keep this pending.** | User |
+| 2 | PIN not set confirmation | `security.json` was reset 19 Nov; next launch prompts fresh PIN setup. Confirm with user. | User |
 
 ## 2. Windows app — known limitations (by design / environment)
 
@@ -60,17 +51,16 @@
 
 | # | Item | Notes |
 |---|---|---|
-| 1 | Tamil TTS | See 1.2 |
-| 2 | Tamil STT | See 1.3 |
-| 3 | `maya-cloud` live call | Code complete; no key configured. Run `maya-cloud set-key` (see `docs/CLOUD.md`) |
-| 4 | Fedora validation | `maya.service` + `install_service.sh` not run on Fedora hardware |
-| 5 | Language Intelligence (translation) | See 1.4 |
-| 6 | Knowledge embeddings upgrade | Optional: `minishlab/potion-multilingual-128M` + rebuild index |
-| 7 | Cloud Gemini | Live key pending (user action) |
+| 1 | `maya-cloud` live call | Code complete; no key configured. Run `maya-cloud set-key` (see `docs/CLOUD.md`) |
+| 2 | Fedora validation | `maya.service` + `install_service.sh` not run on Fedora hardware |
+| 3 | Knowledge embeddings upgrade | Optional: `minishlab/potion-multilingual-128M` + rebuild index |
+| 4 | Cloud Gemini | Live key pending (user action) |
+
+> Tamil TTS, Tamil STT and local translation are now DONE (19 Nov) — removed from pending.
 
 ## 5. Cleanup (done 19 Nov 2026)
 
-- ✅ Legacy duplicates removed: `MAYA AI\scripts\maya-launch.ps1`, `maya-launch.sh`, `LAPTOP\windows\app\autostart.ps1`
+- ✅ Legacy duplicates removed: `MAYA AI\scripts\maya-launch.ps1`, `maya-launch.sh` (`LAPTOP\windows\app\autostart.ps1` restored — needed if item 1.1 is wired later)
 - ✅ Old embedding cache removed: `MAYA AI\Model\hf\hub\models--minishlab--potion-base-8M` (~29 MB freed)
 - ✅ `security.json` reset (backup: `JARVIS\backups\security.json.bak-19nov`); next launch will prompt for fresh PIN setup
 

@@ -237,6 +237,7 @@ class VoiceViewModel(
                     when (msg.role) {
                         MessageRole.USER -> ChatMessageDto("user", msg.content)
                         MessageRole.MAYA -> ChatMessageDto("assistant", msg.content)
+                        MessageRole.ASSISTANT -> ChatMessageDto("assistant", msg.content)
                         else -> null
                     }
                 }

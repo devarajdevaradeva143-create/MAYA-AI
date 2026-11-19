@@ -84,6 +84,86 @@ class HybridPort(Protocol):
 
 
 @runtime_checkable
+class TeacherPort(Protocol):
+    """Port for AI English Teacher service.
+
+    Implementations provide AI-generated lessons and persistent progress tracking.
+    """
+
+    def generate_lesson(self, topic: str, level: str, lesson_type: str = "mixed") -> dict[str, Any]:
+        """Generate an AI lesson for the given topic, level, and type.
+
+        Args:
+            topic: One of "Vocabulary", "Grammar", "Pronunciation", "Idioms", "Conversation"
+            level: One of "Beginner", "Intermediate", "Advanced"
+            lesson_type: Type of lesson - "grammar", "vocab", "conversation", "mixed"
+
+        Returns:
+            Dict with keys: id, topic, level, type, prompt, answer, explanation, source, created
+        """
+        ...
+
+    def check_answer(self, lesson_id: str, user_answer: str) -> dict[str, Any]:
+        """Check a user's answer against the lesson's correct answer.
+
+        Args:
+            lesson_id: The ID of the lesson (from generate_lesson)
+            user_answer: The user's submitted answer
+
+        Returns:
+            Dict with keys: correct (bool|None), feedback (str), score (int 0-100)
+        """
+        ...
+
+    def get_progress(self, lesson_id: str | None = None) -> dict[str, Any]:
+        """Get progress for a specific lesson or all lessons.
+
+        Args:
+            lesson_id: Optional specific lesson ID. If None, returns aggregate progress.
+
+        Returns:
+            If lesson_id: Dict with keys: lesson_id, completed, score, attempts, last_attempt_ts
+            If None: Dict with aggregate stats (totals, streak, topics, recent, lessons list)
+        """
+        ...
+
+    def mark_complete(self, lesson_id: str, score: int) -> dict[str, Any]:
+        """Mark a lesson as completed with the given score.
+
+        Args:
+            lesson_id: The ID of the lesson
+            score: Score 0-100
+
+        Returns:
+            Updated progress record for the lesson
+        """
+        ...
+
+    def reset_progress(self) -> None:
+        """Reset all progress data."""
+        ...
+
+
+@runtime_checkable
+class WanPort(Protocol):
+    """Internet/WAN remote transport (relay + TLS).
+
+    Implementations connect to a relay, exchange framed messages, and provide
+    an optional upgrade path from LAN to WAN. This is a skeleton contract.
+    """
+
+    def connect(self, relay_url: str, token: str) -> bool: ...
+
+    def send(self, message: bytes) -> bool: ...
+
+    def receive(self) -> bytes | None: ...
+
+    def disconnect(self) -> None: ...
+
+    def is_connected(self) -> bool: ...
+
+
+@runtime_checkable
 class WakePort(Protocol):
     def status(self) -> dict[str, Any]: ...
 
@@ -109,6 +189,9 @@ class ServerSettings:
     max_devices: int = 8
     allowed_roots: list[str] = field(default_factory=list)
     enabled: bool = True
+    wan_enabled: bool = False
+    wan_relay_url: str = ""
+    wan_cert_path: str = ""
 
 
 @dataclass
@@ -120,6 +203,7 @@ class ServerServices:
     pc: PcPort
     monitor: MonitorPort
     wake: WakePort
+    teacher: TeacherPort | None = None
     settings: ServerSettings = field(default_factory=ServerSettings)
     laptop_name: str = "Maya-Laptop"
     host: str = ""
@@ -132,3 +216,4 @@ class ServerServices:
     screen: ScreenPort | None = None
     input: InputPort | None = None
     hybrid: HybridPort | None = None
+    wan: WanPort | None = None

@@ -35,6 +35,8 @@ def capabilities_for(services) -> list[str]:  # noqa: ANN001 - ServerServices
         caps.append("remote_input")
     if services.hybrid is not None:
         caps.append("hybrid")
+    if services.settings.wan_enabled:
+        caps.append("wan")
     return caps
 
 
@@ -57,4 +59,5 @@ def health(request: Request) -> HealthResponse:
         capabilities=capabilities_for(services),
         paired_devices=paired,
         uptime_s=max(0, int(time.time() - services.started_at)),
+        wan_host=services.settings.wan_relay_url or None,
     )

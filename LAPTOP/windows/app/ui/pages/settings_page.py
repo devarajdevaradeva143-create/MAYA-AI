@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.services.server_service import shared_server_service
+from app.services import autostart_service
 from app.settings_repository import SettingsError, SettingsRepository
 from app.ui.theme import MODES, ThemeManager
 from app.ui.workers import ServerStartWorker
@@ -116,6 +117,8 @@ class SettingsPage(QScrollArea):
         self._minimize_to_tray = QCheckBox("Minimize to the tray instead of the taskbar")
         self._start_minimized = QCheckBox("Start minimized")
         self._autostart = QCheckBox("Start Maya when Windows starts")
+        self._autostart.setChecked(autostart_service.is_autostart_enabled())
+        self._autostart.toggled.connect(self._on_autostart_toggled)
 
         for widget in (
             self._close_to_tray,
@@ -125,9 +128,13 @@ class SettingsPage(QScrollArea):
         ):
             layout.addWidget(widget)
 
-        self._autostart.setEnabled(False)
-        self._autostart.setToolTip("Installed by the autostart script (Phase 10).")
         self._layout.addWidget(card)
+
+    def _on_autostart_toggled(self, checked: bool) -> None:
+        ok = autostart_service.enable_autostart() if checked else autostart_service.disable_autostart()
+        self._autostart.setChecked(autostart_service.is_autostart_enabled())
+        if not ok:
+            self._autostart.setToolTip("Could not update the Windows startup entry.")
 
     # -- phone server -------------------------------------------------
     def _build_server(self) -> None:

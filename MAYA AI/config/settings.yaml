@@ -204,6 +204,12 @@ server:
   max_pair_attempts: 5
   lockout_minutes: 10
   max_devices: 8
+  wan:
+    enabled: false
+    relay_url: ""
+    cert_path: ""
+    key_path: ""
+    mode: lan            # lan | wan
 
 # desktop UI
   auto_start: false

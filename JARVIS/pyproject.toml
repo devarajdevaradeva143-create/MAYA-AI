@@ -16,6 +16,7 @@ dependencies = [
     "psutil",
     "pypdf",
     "httpx",
+    "cryptography>=42",
 ]
 
 [project.optional-dependencies]

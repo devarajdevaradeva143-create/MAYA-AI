@@ -49,7 +49,7 @@ object PromptBuilder {
         val budget = (maxChars - system.length).coerceAtLeast(200)
 
         val turns = history.asSequence()
-            .filter { it.role == MessageRole.USER || it.role == MessageRole.MAYA }
+            .filter { it.role == MessageRole.USER || it.role == MessageRole.MAYA || it.role == MessageRole.ASSISTANT }
             .filter { it.status == MessageStatus.SENT }
             .filter { it.content.isNotBlank() }
             .toList()
