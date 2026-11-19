@@ -28,7 +28,7 @@ cd "LAPTOP\windows"
 ## Test
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest -q      # 185 tests
+.\.venv\Scripts\python.exe -m pytest -q      # 195 tests
 .\.venv\Scripts\ruff.exe check app tests      # clean
 ```
 

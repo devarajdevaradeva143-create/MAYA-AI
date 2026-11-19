@@ -38,10 +38,12 @@ ACTION_POLICIES: dict[str, str] = {
     "clipboard.get": ASK,
     "clipboard.set": ASK,
     "notify": ALLOW,
+    "whatsapp.message": ASK,
 }
 
 MAX_WRITE_BYTES = 256 * 1024
 MAX_CLIPBOARD_BYTES = 64 * 1024
+MAX_MESSAGE_BYTES = 4096
 
 DENIED_COMMAND_PATTERNS: tuple[str, ...] = (
     "format",
@@ -110,6 +112,8 @@ def describe(action: str, params: dict[str, Any]) -> str:
         return "Write to the clipboard"
     if action == "notify":
         return f"Show notification: {params.get('title', '')}"
+    if action == "whatsapp.message":
+        return f"Open WhatsApp with a message to {params.get('number', '')}"
     return action
 
 
@@ -136,6 +140,11 @@ def _require_int(params: dict[str, Any], key: str, low: int, high: int) -> int:
     if not low <= value <= high:
         raise ApiError(2001, f"Parameter out of range: {key}")
     return value
+
+
+def whatsapp_digits(number: str) -> str:
+    """Country-code number with digits only (wa.me format)."""
+    return "".join(ch for ch in number if ch.isdigit())
 
 
 def _system_roots() -> list[Path]:
@@ -265,6 +274,15 @@ def validate(action: str, params: dict[str, Any], allowed_roots: list[str]) -> s
         body = params.get("body", "")
         if not isinstance(body, str) or len(body) > 1000:
             raise ApiError(2001, "Invalid parameter: body")
+    elif action == "whatsapp.message":
+        number = _require_str(params, "number", max_length=32)
+        if not 7 <= len(whatsapp_digits(number)) <= 15:
+            raise ApiError(2001, "Invalid phone number")
+        text = params.get("text")
+        if not isinstance(text, str) or not text.strip():
+            raise ApiError(2001, "Missing parameter: text")
+        if len(text.encode("utf-8")) > MAX_MESSAGE_BYTES:
+            raise ApiError(2003, "Message too large")
 
     if policy == ALLOW:
         return ""

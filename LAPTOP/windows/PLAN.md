@@ -4,7 +4,7 @@
 > Vera AI coder ithai paathu phase-by-phase code pannalam.
 > Simple Thanglish-la ezhuthirukken.
 
-**Status:** Build complete — all 13 phases implemented (185 tests green). Monitor, Teacher, Security pages wired; PIN lock, tray settings, phone server UI added.
+**Status:** Build complete — all 13 phases implemented (195 tests green). Monitor, Teacher, Security pages wired; PIN lock, tray settings, phone server UI added.
 
 | Phase | Status |
 |---|---|

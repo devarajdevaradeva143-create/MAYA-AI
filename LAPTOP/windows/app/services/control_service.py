@@ -18,8 +18,10 @@ import threading
 import time
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 import psutil
+from custom.server.policy import whatsapp_digits
 from custom.tools import pc_control
 from custom.tools.control_guard import is_command_blocked
 from custom.tools.path_guard import is_path_allowed
@@ -47,6 +49,37 @@ def _run_hidden(args: list[str], timeout: float = 15) -> subprocess.CompletedPro
 
 def _ps_quote(value: str) -> str:
     return value.replace("'", "''")
+
+
+def build_whatsapp_uri(number: str, text: str) -> str:
+    """`whatsapp:` deep link that only prefills the chat (user presses Send)."""
+    digits = whatsapp_digits(number)
+    if len(digits) < 7:
+        raise RuntimeError("Invalid phone number")
+    return f"whatsapp://send?phone={digits}&text={quote(text, safe='')}"
+
+
+def build_wa_me_url(number: str, text: str) -> str:
+    """Browser fallback when WhatsApp Desktop is not installed."""
+    digits = whatsapp_digits(number)
+    if len(digits) < 7:
+        raise RuntimeError("Invalid phone number")
+    return f"https://wa.me/{digits}?text={quote(text, safe='')}"
+
+
+def _protocol_registered(scheme: str) -> bool:
+    """True when a `scheme:` handler is registered on this Windows machine."""
+    if sys.platform != "win32":
+        return False
+    try:
+        import winreg
+    except ImportError:  # pragma: no cover - non-Windows
+        return False
+    try:
+        with winreg.OpenKey(winreg.HKEY_CLASSES_ROOT, scheme):
+            return True
+    except OSError:
+        return False
 
 
 class ControlService:
@@ -335,6 +368,23 @@ class ControlService:
             creationflags=CREATE_NO_WINDOW,
         )
         return {"message": "Notification shown"}
+
+    # -- whatsapp -----------------------------------------------------
+
+    def _do_whatsapp_message(self, params: dict[str, Any]) -> dict[str, Any]:
+        """Open WhatsApp with the chat prefilled. The user still presses Send."""
+        self._require_windows()
+        number = str(params["number"])
+        text = str(params["text"]).strip()
+        if not text:
+            raise RuntimeError("Message is empty")
+
+        if _protocol_registered("whatsapp"):
+            os.startfile(build_whatsapp_uri(number, text))  # type: ignore[attr-defined]
+            return {"message": "WhatsApp opened with the message - press Send"}
+
+        os.startfile(build_wa_me_url(number, text))  # type: ignore[attr-defined]
+        return {"message": "WhatsApp Desktop not found - opened wa.me in the browser"}
 
     # -- helpers ------------------------------------------------------
 

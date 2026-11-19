@@ -8,7 +8,7 @@
 
 ## 0. Status snapshot
 
-- **Windows desktop app**: complete for the planned 11 phases (185 tests pass, ruff clean, `dist\mayaai.exe` + desktop shortcut working).
+- **Windows desktop app**: complete for the planned 11 phases (195 tests pass, ruff clean, `dist\mayaai.exe` + desktop shortcut working).
 - **Git**: initialized, first commit `11444d7` pushed to `origin/main`.
 - **OpenJarvis**: untouched (read-only), clean.
 - **Mobile app**: Phases 0-12 implemented, debug+release APK built; Phase 9 on-device model test pending.
@@ -75,7 +75,7 @@
 ## 6. Verified complete (honest claim)
 
 - All 11 planned Windows phases ✅
-- 185 tests pass, ruff clean
+- 195 tests pass, ruff clean
 - `dist\mayaai.exe` (61 MB) + desktop shortcut working
 - Path bug + 3 runtime bugs fixed
 - Phone server auto-start wired (Settings checkbox)
@@ -83,6 +83,8 @@
 - `JARVIS\OpenJarvis\` untouched (clean)
 - Engine venv repaired 19-11: `.venv-engine` editable link pointed to deleted `maya-maya\OpenJarvis` → reinstalled from current path; `import openjarvis` + `jarvis --version` OK; JARVIS tests 333 passed / 1 skipped
 - `.gitignore` fix 19-11: `DEVARAJ/` was unanchored → ignored `com/devaraj/` Kotlin package (mobile source never committed); now `/DEVARAJ/`, mobile source tracked
+- PC Control page 19-11: display labels were passed straight to `ControlService` (every action failed with "Unsupported action"); added `ACTION_IDS` label→id map, `ConfirmDialog` was a `QWidget` with no `setModal` + `setContentsMargens` typo (crashed), audit signal now connected
+- WhatsApp (laptop) 19-11: `whatsapp.message` action — confirm dialog → opens WhatsApp Desktop with `whatsapp://send?phone=…&text=…` prefilled (browser `wa.me` fallback); user presses Send. Tests: +9 (`tests/test_whatsapp.py`)
 
 ## 7. Known issues / pitfalls
 

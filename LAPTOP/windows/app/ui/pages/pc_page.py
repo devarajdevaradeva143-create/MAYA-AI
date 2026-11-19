@@ -8,6 +8,7 @@ from typing import Any
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QComboBox,
+    QDialog,
     QGridLayout,
     QHBoxLayout,
     QLabel,
@@ -20,8 +21,28 @@ from PySide6.QtWidgets import (
 
 from app.services.control_service import ControlService
 
+# UI label -> server action id (the phone API and ControlService use the ids).
+ACTION_IDS: dict[str, str] = {
+    "Open app": "app.open",
+    "Close app": "app.close",
+    "Read file": "file.read",
+    "Edit file": "file.write",
+    "Delete file": "file.delete",
+    "Run command": "cmd.run",
+    "Lock workstation": "system.lock",
+    "Sleep": "system.sleep",
+    "Shutdown": "system.shutdown",
+    "Set volume": "system.volume",
+    "Mute/unmute": "system.mute",
+    "Screenshot": "system.screenshot",
+    "Clipboard get": "clipboard.get",
+    "Clipboard set": "clipboard.set",
+    "Notify": "notify",
+    "WhatsApp message": "whatsapp.message",
+}
 
-class ConfirmDialog(QWidget):
+
+class ConfirmDialog(QDialog):
     """Modal dialog: [Cancel] [Allow] for destructive actions."""
 
     allow_clicked = Signal()
@@ -35,7 +56,7 @@ class ConfirmDialog(QWidget):
         self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargens(40, 40, 40, 40)
+        layout.setContentsMargins(40, 40, 40, 40)
         layout.setSpacing(12)
 
         text = f'Maya wants to: <b>{action}</b><br/>Risk: {risk}'
@@ -83,6 +104,8 @@ class PCPage(QWidget):
         super().__init__(parent)
         self._control = control or ControlService()
         self._audit_log: deque[str] = deque(maxlen=50)
+        self._pending_params: dict[str, Any] = {}
+        self._pending_action_id: str = ""
 
         self._build_ui()
         self._update_audit_view()
@@ -117,6 +140,7 @@ class PCPage(QWidget):
             "Clipboard get",
             "Clipboard set",
             "Notify",
+            "WhatsApp message",
         ])
         self._action_combo.setFixedWidth(200)
 
@@ -158,8 +182,8 @@ class PCPage(QWidget):
         layout.addLayout(left, 0)
 
         # Connect audit signal (ControlService writes to its own log;
-        # PCPage tracks its own local audit view).
-        # self._control.action_performed.connect(self._on_action_performed)
+        # PCPage also keeps a local view).
+        self.action_performed.connect(self._on_action_performed)
 
     # -- behaviour ----------------------------------------------------
 
@@ -207,7 +231,11 @@ class PCPage(QWidget):
         elif action == "Set volume":
             level, ok1 = self._show_input("Volume level (0-100)", "e.g. 75")
             if ok1 and level:
-                params["level"] = int(level)
+                try:
+                    params["level"] = max(0, min(100, int(level)))
+                except ValueError:
+                    self.action_performed.emit(action, "Error: volume must be a number 0-100")
+                    return
         elif action == "Mute/unmute":
             self._show_confirm("Toggle mute", "Toggle system audio mute?")
             return
@@ -228,12 +256,30 @@ class PCPage(QWidget):
                 if ok2:
                     params["title"] = title
                     params["body"] = body
+        elif action == "WhatsApp message":
+            number, ok1 = self._show_input(
+                "WhatsApp number (country code, digits)", "e.g. 919876543210"
+            )
+            if not (ok1 and number):
+                return
+            text, ok2 = self._show_multiline("WhatsApp message", "Type the message")
+            if not (ok2 and text.strip()):
+                return
+            params["number"] = number
+            params["text"] = text.strip()
+            self._show_confirm(
+                f"Send WhatsApp to {number}",
+                "WhatsApp opens with this message prefilled; you press Send.",
+                params,
+                "whatsapp.message",
+            )
+            return
 
         # Execute the action
         try:
-            result = self._control.execute(action, params)
+            result = self._control.execute(ACTION_IDS.get(action, action), params)
             self.action_performed.emit(action, str(result.get("message", result)))
-        except RuntimeError as e:
+        except (RuntimeError, KeyError, OSError) as e:
             self.action_performed.emit(action, f"Error: {e}")
 
     def _show_input(self, label: str, placeholder: str) -> tuple[str, bool]:
@@ -272,45 +318,36 @@ class PCPage(QWidget):
             return (plain.toPlainText() or ""), True
         return ("", False)
 
-    def _show_confirm(self, action: str, risk: str) -> None:
+    def _show_confirm(
+        self,
+        action: str,
+        risk: str,
+        params: dict[str, Any] | None = None,
+        action_id: str | None = None,
+    ) -> None:
         """Show a ConfirmDialog; if Allow → execute, if Cancel → do nothing."""
+        self._pending_params = dict(params or {})
+        self._pending_action_id = action_id or ACTION_IDS.get(action, action)
         d = ConfirmDialog(action, risk, self)
         d.allow_clicked.connect(lambda: self._execute_after_confirm(action))
-        d.cancel_clicked.connect(d.close)
+        d.cancel_clicked.connect(self._on_confirm_cancelled)
         d.show()
+
+    def _on_confirm_cancelled(self) -> None:
+        self._pending_params = {}
+        self._pending_action_id = ""
 
     def _execute_after_confirm(self, action: str) -> None:
         """Execute the action after the user confirmed."""
-        if action == "Lock workstation":
-            pass  # no params
-        elif action == "Sleep":
-            pass
-        elif action == "Shutdown":
-            # Request shutdown via control service
-            try:
-                self._control.execute(action, {})
-            except RuntimeError as e:
-                self.action_performed.emit(action, f"Error: {e}")
-        elif action == "Sleep":
-            try:
-                self._control.execute(action, {})
-            except RuntimeError as e:
-                self.action_performed.emit(action, f"Error: {e}")
-        elif action == "Mute/unmute":
-            try:
-                self._control.execute(action, {})
-            except RuntimeError as e:
-                self.action_performed.emit(action, f"Error: {e}")
-        elif action == "Screenshot":
-            try:
-                self._control.execute(action, {})
-            except RuntimeError as e:
-                self.action_performed.emit(action, f"Error: {e}")
-        elif action == "Clipboard get":
-            try:
-                self._control.execute(action, {})
-            except RuntimeError as e:
-                self.action_performed.emit(action, f"Error: {e}")
+        params = self._pending_params
+        action_id = self._pending_action_id or ACTION_IDS.get(action, action)
+        self._pending_params = {}
+        self._pending_action_id = ""
+        try:
+            result = self._control.execute(action_id, params)
+            self.action_performed.emit(action, str(result.get("message", result)))
+        except (RuntimeError, KeyError, OSError) as e:
+            self.action_performed.emit(action, f"Error: {e}")
 
     def _on_action_performed(self, action: str, result: str) -> None:
         """Called from ControlService after an action completes."""

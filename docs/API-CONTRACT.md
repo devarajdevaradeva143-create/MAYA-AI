@@ -508,6 +508,7 @@ Token single-use, 60 s, exact action + params-ku bind.
 | `clipboard.get` | – | ask | |
 | `clipboard.set` | `text` | ask | max 64 KB |
 | `notify` | `title`, `body` | allow | toast only |
+| `whatsapp.message` | `number`, `text` | ask | opens WhatsApp prefilled; user presses Send. max 4 KB |
 
 **Allowed roots** (settings `permissions.allowed_roots`):
 project root, Desktop, Documents, Downloads. System folders (`C:\Windows`, `C:\Program Files`, `AppData`) deny.

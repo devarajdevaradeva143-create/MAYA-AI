@@ -22,7 +22,7 @@ docs\API-CONTRACT.md
 ## Status
 
 Build complete — all 7 pages wired (chat, voice, pc, monitor, teacher, security, settings).
-185 tests pass, ruff clean. `dist\mayaai.exe` built.
+195 tests pass, ruff clean. `dist\mayaai.exe` built.
 
 ### Implemented
 - Chat: streaming, Stop, Retry, persona switch, history persistence

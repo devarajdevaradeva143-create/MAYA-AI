@@ -65,7 +65,7 @@ cd "LAPTOP\windows"
 
 ```powershell
 cd "LAPTOP\windows"
-.\.venv\Scripts\python.exe -m pytest -q          # 185 tests
+.\.venv\Scripts\python.exe -m pytest -q          # 195 tests
 .\.venv\Scripts\ruff.exe check app tests          # must be clean
 ```
 
@@ -193,7 +193,7 @@ Remote: `https://github.com/devarajdevaradeva143-create/MAYA-AI.git`. Branch: `m
 
 ```powershell
 cd "LAPTOP\windows"
-.\.venv\Scripts\python.exe -m pytest -q          # 185 tests
+.\.venv\Scripts\python.exe -m pytest -q          # 195 tests
 .\.venv\Scripts\ruff.exe check app tests          # All checks passed
 .\.venv\Scripts\python.exe -m PyInstaller mayaai.spec --noconfirm
 .\dist\mayaai.exe --version                      # Maya AI 0.1.0
