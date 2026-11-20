@@ -245,8 +245,11 @@ if __name__ == "__main__":
     except SystemExit:
         raise
     except BaseException:  # noqa: BLE001 - packaged exe must show what broke
-        import traceback
+        try:
+            import traceback
 
-        traceback.print_exc()
+            traceback.print_exc()
+        except Exception:  # noqa: BLE001 - no console in windowed builds
+            pass
         _exit_code = 1
     raise SystemExit(_exit_code)

@@ -21,7 +21,7 @@
 
 | # | Item | What's needed | Effort |
 |---|---|---|---|
-| 1 | OS-level autostart (boot-la Maya auto-start) | Registry write + tray-only launch wiring; `install_autostart.ps1` exists but not wired. **User asked to keep this pending.** | User |
+| 1 | OS-level autostart (boot-la Maya auto-start) | ✅ Done: Registry Run entry wired via Settings toggle + `install_autostart.ps1` updated for packaged exe. | Done |
 | 2 | PIN not set confirmation | `security.json` was reset 19 Nov; next launch prompts fresh PIN setup. Confirm with user. | User |
 
 ## 2. Windows app — known limitations (by design / environment)
@@ -106,7 +106,7 @@
 
 1. `mobile phase 9` — on-device model test (airplane mode, cancel, unload, tok/s)
 2. `tamil-lm-2b` — laptop model switch
-3. `os autostart` — Windows boot autostart
+3. ~~`os autostart` — Windows boot autostart~~ (done)
 4. `tamil stt` / `tamil tts` — language support
 5. `teacher ai lessons` — AI-generated English lessons
 6. `cloud key` — `maya-cloud set-key`

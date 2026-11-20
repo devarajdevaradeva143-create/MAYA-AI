@@ -285,3 +285,17 @@ class WakeListenResponse(BaseModel):
 
 class WakeStopResponse(BaseModel):
     listening: bool
+
+
+# --- Device status (phone -> laptop) --------------------------------------
+
+class PhoneStats(BaseModel):
+    battery_percent: int | None = Field(default=None, ge=0, le=100)
+    storage_used_percent: int | None = Field(default=None, ge=0, le=100)
+    ram_used_percent: int | None = Field(default=None, ge=0, le=100)
+    uptime_hours: int | None = Field(default=None, ge=0)
+
+
+class DeviceStatusRequest(BaseModel):
+    device_id: str = Field(min_length=8, max_length=64)
+    stats: PhoneStats

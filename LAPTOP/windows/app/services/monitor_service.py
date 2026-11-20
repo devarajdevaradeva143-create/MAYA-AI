@@ -8,13 +8,35 @@ from __future__ import annotations
 
 import sys
 import time
-from typing import Any
+from typing import Any, Callable
 
 import psutil
 from custom.tools import monitor
 
 _TEMP_CACHE: tuple[float, float | None] | None = None
 _TEMP_CACHE_TTL_S = 10.0
+
+# Optional callback to fetch phone stats from the server's token store.
+# Set by the Windows app when the phone server is running.
+_phone_stats_provider: Callable[[], list[dict[str, Any]]] | None = None
+
+
+def set_phone_stats_provider(provider: Callable[[], list[dict[str, Any]]] | None) -> None:
+    """Register a callback to fetch paired phone stats (battery, storage, RAM, uptime).
+    Called from the Windows app when the phone server is running.
+    """
+    global _phone_stats_provider
+    _phone_stats_provider = provider
+
+
+def get_phone_stats() -> list[dict[str, Any]]:
+    """Fetch phone stats from the registered provider, if any."""
+    if _phone_stats_provider is not None:
+        try:
+            return _phone_stats_provider()
+        except Exception:  # noqa: BLE001 - best effort
+            return []
+    return []
 
 
 def _windows_cpu_temp() -> float | None:
@@ -96,7 +118,7 @@ class MonitorAdapter:
         battery = monitor.get_battery()
         temperature = monitor.get_temperature()
 
-        return {
+        snapshot = {
             "ts": int(time.time()),
             "cpu": {
                 "percent": _number(cpu.get("usage_percent")),
@@ -133,6 +155,13 @@ class MonitorAdapter:
             "disks": self._disks(),
             "uptime_s": self._uptime(),
         }
+
+        # Include paired phone stats if available
+        phone_stats = get_phone_stats()
+        if phone_stats:
+            snapshot["phone_devices"] = phone_stats
+
+        return snapshot
 
     @staticmethod
     def _cpu_temp_c(fallback: dict[str, Any]) -> float | None:

@@ -1,4 +1,6 @@
-"""Laptop control endpoints: status, command, confirm, cancel."""
+"""Laptop control endpoints: status, command, confirm, cancel.
+Device status endpoint for phone -> laptop stats reporting.
+"""
 
 from __future__ import annotations
 
@@ -12,6 +14,8 @@ from custom.server.models import (
     PcCommandRequest,
     PcCommandResponse,
     PcConfirmRequest,
+    DeviceStatusRequest,
+    PhoneStats,
 )
 
 router = APIRouter(prefix="/pc", tags=["pc"])
@@ -110,3 +114,25 @@ def pc_cancel(
 ) -> PcCommandResponse:
     request.app.state.confirm.cancel(body.confirm_token, device.device_id)
     return PcCommandResponse(status="cancelled")
+
+
+# --- Device status (phone reports its own stats) --------------------------
+
+@router.post("/device/status")
+def device_status(
+    body: DeviceStatusRequest,
+    request: Request,
+    device: DeviceDep,
+) -> dict:
+    """Phone POSTs its local stats (battery, storage, RAM, uptime).
+    Stored per device_id and broadcast via events WebSocket.
+    """
+    # Verify the device_id matches the authenticated device
+    if body.device_id != device.device_id:
+        raise ApiError(4002, "Device ID mismatch")
+
+    # Store in device record (extend TokenStore to persist phone stats)
+    state = request.app.state
+    state.tokens.update_phone_stats(device.device_id, body.stats.model_dump())
+
+    return {"status": "ok"}

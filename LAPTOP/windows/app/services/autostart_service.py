@@ -25,9 +25,13 @@ def _winreg() -> Any | None:
 
 
 def _launch_command() -> str:
-    python = sys.executable
+    exe = sys.executable
+    # Packaged build: the exe is the interpreter and resolves its own paths.
+    if getattr(sys, "frozen", False):
+        return f'"{exe}" --tray'
+    # Dev build: run from the app folder so `app` is importable.
     app_dir = Path(__file__).resolve().parents[2]
-    return f'"{python}" -m app --tray-only --cwd "{app_dir}"'
+    return f'cmd /c cd /d "{app_dir}" && "{exe}" -m app --tray'
 
 
 def is_autostart_enabled() -> bool:

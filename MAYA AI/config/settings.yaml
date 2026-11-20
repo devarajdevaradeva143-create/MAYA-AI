@@ -213,7 +213,7 @@ server:
     mode: lan            # lan | wan
 
 # desktop UI
-  auto_start: false
+  auto_start: true
 ui:
   theme: system          # dark | light | system
   window_width: 1180

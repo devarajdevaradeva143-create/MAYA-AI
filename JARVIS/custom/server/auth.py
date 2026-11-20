@@ -59,6 +59,12 @@ class DeviceRecord:
     expires_at: int
     app_version: str = ""
     revoked: bool = False
+    # Phone stats (additive, optional)
+    phone_battery_percent: int | None = None
+    phone_storage_used_percent: int | None = None
+    phone_ram_used_percent: int | None = None
+    phone_uptime_hours: int | None = None
+    phone_stats_updated: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -74,6 +80,11 @@ class DeviceRecord:
             expires_at=int(data.get("expires_at", 0)),
             app_version=str(data.get("app_version", "")),
             revoked=bool(data.get("revoked", False)),
+            phone_battery_percent=data.get("phone_battery_percent"),
+            phone_storage_used_percent=data.get("phone_storage_used_percent"),
+            phone_ram_used_percent=data.get("phone_ram_used_percent"),
+            phone_uptime_hours=data.get("phone_uptime_hours"),
+            phone_stats_updated=int(data.get("phone_stats_updated", 0)),
         )
 
     def is_expired(self, now: float | None = None) -> bool:
@@ -216,6 +227,21 @@ class TokenStore:
             record.revoked = False
             self._save()
             return record
+
+    def update_phone_stats(self, device_id: str, stats: dict) -> None:
+        """Store phone-reported stats (battery, storage, RAM, uptime)."""
+        with self._lock:
+            self._load()
+            record = self._devices.get(device_id)
+            if record is None:
+                return
+            stamp = int(time.time())
+            record.phone_battery_percent = stats.get("battery_percent")
+            record.phone_storage_used_percent = stats.get("storage_used_percent")
+            record.phone_ram_used_percent = stats.get("ram_used_percent")
+            record.phone_uptime_hours = stats.get("uptime_hours")
+            record.phone_stats_updated = stamp
+            self._save()
 
 
 class RateLimiter:

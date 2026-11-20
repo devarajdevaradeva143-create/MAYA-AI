@@ -165,7 +165,7 @@ See `LAPTOP/fedora/README.md`.
 | Symptom | Cause / Fix |
 |---|---|
 | `[config] Warning: .../Temp/MAYA AI/config/settings.yaml not found` | Old exe built before the paths fix. Rebuild with current source. |
-| `Failed to execute script 'main'` | Run the exe from a console to see the traceback (console=True). Check `MAYA AI\logs\app.log`. |
+| `Failed to execute script 'main'` | The packaged exe is windowed (no console). Run in dev mode (`.\.venv\Scripts\python.exe -m app`) to see the traceback, or check `MAYA AI\logs\app.log`. |
 | `pystray`/`Pillow` missing | You're in `JARVIS\.venv`. Use `LAPTOP\windows\.venv`. |
 | Phone server 404 on `/health` | Correct path is `/api/v1/health`. |
 | `Settings key is not editable` | Add the key to `_SCHEMA` in `app/settings_repository.py`. |

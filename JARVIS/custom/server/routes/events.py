@@ -19,6 +19,24 @@ PING_INTERVAL_S = 25.0
 POLL_INTERVAL_S = 0.25
 
 
+def _build_phone_stats(devices: list) -> list[dict]:
+    """Extract phone stats from active paired devices."""
+    phone_stats = []
+    for d in devices:
+        if d.phone_battery_percent is not None or d.phone_storage_used_percent is not None \
+           or d.phone_ram_used_percent is not None or d.phone_uptime_hours is not None:
+            phone_stats.append({
+                "device_id": d.device_id,
+                "name": d.name,
+                "battery_percent": d.phone_battery_percent,
+                "storage_used_percent": d.phone_storage_used_percent,
+                "ram_used_percent": d.phone_ram_used_percent,
+                "uptime_hours": d.phone_uptime_hours,
+                "updated": d.phone_stats_updated,
+            })
+    return phone_stats
+
+
 @router.websocket("/ws/events")
 async def events_socket(websocket: WebSocket) -> None:
     try:
@@ -53,6 +71,10 @@ async def events_socket(websocket: WebSocket) -> None:
             if now - last_status >= STATUS_INTERVAL_S:
                 try:
                     snapshot = await asyncio.to_thread(state.services.monitor.snapshot)
+                    # Include paired phone stats
+                    phone_stats = _build_phone_stats(state.tokens.list_active())
+                    if phone_stats:
+                        snapshot["phone_devices"] = phone_stats
                     await websocket.send_json({"type": "status", "data": snapshot})
                 except Exception:  # noqa: BLE001 - socket or monitor failed
                     break

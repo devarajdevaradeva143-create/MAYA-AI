@@ -106,7 +106,6 @@ class MayaMainWindow(QMainWindow):
 
         self._pages: dict[str, int] = {}
         self._titles = {key: label for key, _icon, label in NAV_ITEMS}
-        self._build_pages()
         self.set_status("Connecting…", "neutral")
 
         self.sidebar.navigate.connect(self.navigate)
@@ -145,32 +144,45 @@ class MayaMainWindow(QMainWindow):
         layout.addWidget(gear)
         return header
 
-    def _build_pages(self) -> None:
-        for key, icon, label in NAV_ITEMS:
-            if key == "chat":
-                page = ChatPage(self._chat, self._chat.engine)
-                page.engine_status.connect(self.set_status)
-            elif key == "settings":
-                page = SettingsPage(self._repository, theme=self._theme)
-                page.theme_changed.connect(self._on_theme_changed)
-            elif key == "voice":
-                page = VoicePage(
-                    voice=self._voice_adapter,
-                    wake=self._wake_adapter,
-                    chat=self._chat,
-                )
-            elif key == "pc":
-                page = PCPage(control=self._control)
-            elif key == "monitor":
-                page = MonitorPage()
-            elif key == "teacher":
-                page = TeacherPage(voice=self._voice_adapter)
-            elif key == "security":
-                page = SecurityPage(security=self._security)
-            else:
-                hint = PAGE_HINTS.get(key, ("", ""))[1]
-                page = PlaceholderPage(icon, label, hint)
+    def _create_page(self, key: str) -> QWidget:
+        """Build (and wire) one page on demand so startup stays fast."""
+        icon = ""
+        label = ""
+        for k, ic, lab in NAV_ITEMS:
+            if k == key:
+                icon, label = ic, lab
+                break
+
+        if key == "chat":
+            page = ChatPage(self._chat, self._chat.engine)
+            page.engine_status.connect(self.set_status)
+        elif key == "settings":
+            page = SettingsPage(self._repository, theme=self._theme)
+            page.theme_changed.connect(self._on_theme_changed)
+        elif key == "voice":
+            page = VoicePage(
+                voice=self._voice_adapter,
+                wake=self._wake_adapter,
+                chat=self._chat,
+            )
+        elif key == "pc":
+            page = PCPage(control=self._control)
+        elif key == "monitor":
+            page = MonitorPage()
+        elif key == "teacher":
+            page = TeacherPage(voice=self._voice_adapter)
+        elif key == "security":
+            page = SecurityPage(security=self._security)
+        else:
+            hint = PAGE_HINTS.get(key, ("", ""))[1]
+            page = PlaceholderPage(icon, label, hint)
+        return page
+
+    def _ensure_page(self, key: str) -> int | None:
+        if key not in self._pages:
+            page = self._create_page(key)
             self._pages[key] = self.stack.addWidget(page)
+        return self._pages.get(key)
 
     # -- tray behaviour ------------------------------------------------
     def closeEvent(self, event) -> None:  # noqa: N802 - Qt signature
@@ -193,7 +205,7 @@ class MayaMainWindow(QMainWindow):
         super().changeEvent(event)
 
     def navigate(self, key: str) -> None:
-        index = self._pages.get(key)
+        index = self._ensure_page(key)
         if index is None:
             return
         self.stack.setCurrentIndex(index)
@@ -203,7 +215,7 @@ class MayaMainWindow(QMainWindow):
 
     def page(self, key: str) -> QWidget | None:
         """Widget registered for a nav key (tests / controller wiring)."""
-        index = self._pages.get(key)
+        index = self._ensure_page(key)
         return self.stack.widget(index) if index is not None else None
 
     # -- status -------------------------------------------------------

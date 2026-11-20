@@ -24,7 +24,7 @@ from app import __version__
 from app.logging_setup import setup_server_logging
 from app.services.control_service import ControlService
 from app.services.engine_service import EngineAdapter
-from app.services.monitor_service import MonitorAdapter
+from app.services.monitor_service import MonitorAdapter, set_phone_stats_provider
 from app.services.remote_service import HybridAdapter, InputAdapter, ScreenAdapter
 from app.services.voice_service import VoiceAdapter
 from app.services.wake_service import WakeAdapter
@@ -249,6 +249,30 @@ class ServerService:
         if self.last_error:
             raise RuntimeError(self.last_error)
 
+        # Register phone stats provider for the Windows app monitor page
+        def _phone_stats_provider() -> list[dict[str, Any]]:
+            try:
+                tokens = self.app.state.tokens
+                devices = tokens.list_active()
+                phone_stats = []
+                for d in devices:
+                    if d.phone_battery_percent is not None or d.phone_storage_used_percent is not None \
+                       or d.phone_ram_used_percent is not None or d.phone_uptime_hours is not None:
+                        phone_stats.append({
+                            "device_id": d.device_id,
+                            "name": d.name,
+                            "battery_percent": d.phone_battery_percent,
+                            "storage_used_percent": d.phone_storage_used_percent,
+                            "ram_used_percent": d.phone_ram_used_percent,
+                            "uptime_hours": d.phone_uptime_hours,
+                            "updated": d.phone_stats_updated,
+                        })
+                return phone_stats
+            except Exception:  # noqa: BLE001
+                return []
+
+        set_phone_stats_provider(_phone_stats_provider)
+
     def stop(self, timeout: float = 5.0) -> None:
         self._unregister_nsd()
         try:
@@ -265,6 +289,9 @@ class ServerService:
         self._server = None
         self._thread = None
         self.bound_port = None
+
+        # Unregister phone stats provider
+        set_phone_stats_provider(None)
 
     # -- internals ----------------------------------------------------
 

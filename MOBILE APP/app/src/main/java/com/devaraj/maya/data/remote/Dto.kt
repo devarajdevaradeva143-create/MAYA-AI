@@ -333,4 +333,25 @@ data class HybridStatusDto(
     val tasks: List<HybridTaskDto> = emptyList(),
 )
 
+// --- Device status (phone -> laptop) ---
+
+@Serializable
+data class DeviceStatusRequest(
+    @SerialName("device_id") val deviceId: String,
+    val stats: PhoneStatsDto,
+)
+
+@Serializable
+data class PhoneStatsDto(
+    @SerialName("battery_percent") val batteryPercent: Int? = null,
+    @SerialName("storage_used_percent") val storageUsedPercent: Int? = null,
+    @SerialName("ram_used_percent") val ramUsedPercent: Int? = null,
+    @SerialName("uptime_hours") val uptimeHours: Int? = null,
+)
+
+@Serializable
+data class DeviceStatusResponse(
+    val status: String = "ok",
+)
+
 const val API_VERSION = 1

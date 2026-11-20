@@ -80,6 +80,7 @@ class MonitorPage(QWidget):
             "cpu": deque(maxlen=30),
             "ram": deque(maxlen=30),
         }
+        self._phone_cards: dict[str, dict] = {}
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._on_tick)
         # timer started in showEvent; stopped in hideEvent (no polling when hidden)
@@ -93,7 +94,11 @@ class MonitorPage(QWidget):
         layout.setContentsMargins(24, 16, 24, 8)
         layout.setSpacing(12)
 
-        # --- Stats grid ---
+        # --- Laptop Stats grid ---
+        laptop_label = QLabel("Laptop")
+        laptop_label.setObjectName("sectionTitle")
+        layout.addWidget(laptop_label)
+
         grid = QGridLayout()
         grid.setContentsMargins(0, 0, 0, 0)
         grid.setSpacing(12)
@@ -114,6 +119,23 @@ class MonitorPage(QWidget):
             self._cards[title] = card
 
         layout.addLayout(grid, 1)
+
+        # --- Phone devices section ---
+        self._phone_section = QVBoxLayout()
+        self._phone_section.setContentsMargins(0, 8, 0, 0)
+        self._phone_section.setSpacing(8)
+
+        self._phone_label = QLabel("Paired Phones")
+        self._phone_label.setObjectName("sectionTitle")
+        self._phone_label.setVisible(False)
+        self._phone_section.addWidget(self._phone_label)
+
+        self._phone_cards_layout = QGridLayout()
+        self._phone_cards_layout.setContentsMargins(0, 0, 0, 0)
+        self._phone_cards_layout.setSpacing(12)
+        self._phone_section.addLayout(self._phone_cards_layout)
+
+        layout.addLayout(self._phone_section)
 
         # --- Disk usage list ---
         left = QVBoxLayout()
@@ -237,6 +259,94 @@ class MonitorPage(QWidget):
 
         # Disk list
         self._disk_view.setPlainText(disk_text)
+
+        # --- Phone devices ---
+        phone_devices = snap.get("phone_devices") or []
+        self._update_phone_cards(phone_devices)
+
+    def _update_phone_cards(self, phone_devices: list[dict]) -> None:
+        """Update or create cards for paired phone devices."""
+        # Hide/show phone section
+        has_phones = len(phone_devices) > 0
+        self._phone_label.setVisible(has_phones)
+
+        # Track existing phone cards
+        existing_devices = set(self._phone_cards.keys()) if hasattr(self, '_phone_cards') else set()
+        current_devices = set()
+
+        # Initialize phone cards dict if not exists
+        if not hasattr(self, '_phone_cards'):
+            self._phone_cards = {}
+
+        for i, device in enumerate(phone_devices):
+            device_id = device.get("device_id", f"unknown_{i}")
+            current_devices.add(device_id)
+
+            name = device.get("name", "Phone")
+            battery = device.get("battery_percent")
+            storage = device.get("storage_used_percent")
+            ram = device.get("ram_used_percent")
+            uptime_hours = device.get("uptime_hours")
+
+            if device_id not in self._phone_cards:
+                # Create new card group for this device
+                device_widget = QWidget()
+                device_layout = QVBoxLayout(device_widget)
+                device_layout.setContentsMargins(0, 0, 0, 0)
+                device_layout.setSpacing(6)
+
+                # Device name header
+                name_label = QLabel(name)
+                name_label.setObjectName("cardLabel")
+                name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                device_layout.addWidget(name_label)
+
+                # Stats grid for this device
+                stats_grid = QGridLayout()
+                stats_grid.setContentsMargins(0, 0, 0, 0)
+                stats_grid.setSpacing(8)
+
+                card_data = [
+                    ("Battery", f"{battery}%" if battery is not None else "—"),
+                    ("Storage", f"{storage}%" if storage is not None else "—"),
+                    ("RAM", f"{ram}%" if ram is not None else "—"),
+                    ("Uptime", f"{uptime_hours}h" if uptime_hours is not None else "—"),
+                ]
+
+                device_cards = {}
+                for j, (title, value) in enumerate(card_data):
+                    row, col = divmod(j, 2)
+                    card = MonitorCard(title, value)
+                    stats_grid.addWidget(card, row, col)
+                    device_cards[title] = card
+
+                device_layout.addLayout(stats_grid)
+                self._phone_cards_layout.addWidget(device_widget, i // 2, i % 2)
+                self._phone_cards[device_id] = {
+                    "widget": device_widget,
+                    "cards": device_cards,
+                    "name_label": name_label,
+                }
+            else:
+                # Update existing cards
+                device_info = self._phone_cards[device_id]
+                device_info["name_label"].setText(name)
+                cards = device_info["cards"]
+                if "Battery" in cards:
+                    cards["Battery"].update_values("Battery", f"{battery}%" if battery is not None else "—", "—")
+                if "Storage" in cards:
+                    cards["Storage"].update_values("Storage", f"{storage}%" if storage is not None else "—", "—")
+                if "RAM" in cards:
+                    cards["RAM"].update_values("RAM", f"{ram}%" if ram is not None else "—", "—")
+                if "Uptime" in cards:
+                    cards["Uptime"].update_values("Uptime", f"{uptime_hours}h" if uptime_hours is not None else "—", "—")
+
+        # Remove cards for devices no longer present
+        for device_id in existing_devices - current_devices:
+            device_info = self._phone_cards.pop(device_id)
+            widget = device_info["widget"]
+            self._phone_cards_layout.removeWidget(widget)
+            widget.deleteLater()
 
     # -- async snapshot path ------------------------------------------
 

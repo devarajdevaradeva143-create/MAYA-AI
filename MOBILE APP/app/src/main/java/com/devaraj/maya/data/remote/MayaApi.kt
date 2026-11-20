@@ -102,7 +102,7 @@ interface MayaApi {
     @POST("hybrid/release")
     suspend fun hybridRelease(): HybridStatusDto
 
-    @GET("wake/status")
+    @POST("wake/status")
     suspend fun wakeStatus(): WakeStatusDto
 
     @POST("wake/listen")
@@ -110,4 +110,7 @@ interface MayaApi {
 
     @POST("wake/stop")
     suspend fun wakeStop(): WakeStopResponse
+
+    @POST("pc/device/status")
+    suspend fun deviceStatus(@Body body: DeviceStatusRequest): DeviceStatusResponse
 }

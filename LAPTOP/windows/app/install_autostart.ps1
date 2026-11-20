@@ -12,28 +12,15 @@ $ErrorActionPreference = "Stop"
 
 $appDir = $PSScriptRoot
 $root = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $appDir))
-$tray = Join-Path $appDir "maya_tray.py"
-$pythonw = Join-Path $root "JARVIS\.venv\Scripts\pythonw.exe"
+$exe = Join-Path $root "LAPTOP\windows\dist\mayaai.exe"
 $taskName = "MayaAI"
 
-if (-not (Test-Path $tray)) {
-    Write-Error "maya_tray.py not found at $tray"
+if (-not (Test-Path $exe)) {
+    Write-Error "mayaai.exe not found at $exe. Build first (see BUILD.md 3.4)."
     exit 1
 }
 
-if (-not (Test-Path $pythonw)) {
-    # Fall back to the engine venv, then to the system python.
-    $pythonw = Join-Path $root "JARVIS\.venv-engine\Scripts\pythonw.exe"
-}
-if (-not (Test-Path $pythonw)) {
-    $pythonw = (Get-Command pythonw.exe -ErrorAction SilentlyContinue).Source
-}
-if (-not $pythonw) {
-    Write-Error "pythonw.exe not found. Install the Maya Python env first (uv sync)."
-    exit 1
-}
-
-$action = New-ScheduledTaskAction -Execute $pythonw -Argument "`"$tray`"" -WorkingDirectory $appDir
+$action = New-ScheduledTaskAction -Execute $exe -Argument "--tray" -WorkingDirectory (Split-Path -Parent $exe)
 $trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
 
@@ -41,5 +28,5 @@ Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger `
     -Settings $settings -Description "Maya AI tray app (local assistant)" -Force | Out-Null
 
 Write-Host "Autostart installed: task '$taskName'"
-Write-Host "  runs: $pythonw `"$tray`""
+Write-Host "  runs: $exe --tray"
 Write-Host "  remove: Unregister-ScheduledTask -TaskName $taskName -Confirm:`$false"

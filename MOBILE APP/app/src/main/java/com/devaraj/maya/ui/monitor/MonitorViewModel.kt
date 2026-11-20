@@ -14,8 +14,10 @@ import androidx.lifecycle.viewModelScope
 import com.devaraj.maya.data.remote.ApiClient
 import com.devaraj.maya.data.remote.ConnectionRepository
 import com.devaraj.maya.data.remote.ConnectionState
+import com.devaraj.maya.data.remote.DeviceStatusRequest
 import com.devaraj.maya.data.remote.EventsMessage
 import com.devaraj.maya.data.remote.EventsSocket
+import com.devaraj.maya.data.remote.PhoneStatsDto
 import com.devaraj.maya.data.remote.PcStatusDto
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -60,12 +62,14 @@ class MonitorViewModel(
 
     fun start() {
         refreshPhone()
+        viewModelScope.launch { sendDeviceStatus() }
         if (pollJob?.isActive == true) return
         pollJob = viewModelScope.launch {
             _state.update { it.copy(polling = true) }
             while (isActive) {
                 refreshPhone()
                 fetchLaptop()
+                sendDeviceStatus()
                 delay(2000)
             }
         }
@@ -150,6 +154,30 @@ class MonitorViewModel(
                     uptimeHours = uptimeHours,
                 ),
             )
+        }
+    }
+
+    private suspend fun sendDeviceStatus() {
+        val conn = connectionRepository.state.value ?: return
+        if (conn !is ConnectionState.Connected) return
+        try {
+            val battery = readBatteryPercent()
+            val storage = readStoragePercent()
+            val ram = readRamPercent()
+            val uptimeHours = SystemClock.elapsedRealtime() / 3_600_000
+            apiClient.api(conn.device.host, conn.device.port).deviceStatus(
+                DeviceStatusRequest(
+                    deviceId = conn.device.id,
+                    stats = PhoneStatsDto(
+                        batteryPercent = battery,
+                        storageUsedPercent = storage,
+                        ramUsedPercent = ram,
+                        uptimeHours = uptimeHours.toInt(),
+                    ),
+                )
+            )
+        } catch (e: Exception) {
+            // Best effort: laptop may not be running or might be offline
         }
     }
 
