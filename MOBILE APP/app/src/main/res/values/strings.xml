@@ -82,7 +82,7 @@
     <string name="chat_delete_confirm">Delete</string>
     <string name="chat_retry">Retry</string>
     <string name="chat_offline_banner">Start Maya on your laptop to chat with the full model.</string>
-    <string name="chat_offline_phone_banner">Laptop offline. Using the phone model (Qwen3 1.7B) — replies may be slower.</string>
+    <string name="chat_offline_phone_banner">Laptop offline. Using the phone model (tamil-lm-2b) — replies may be slower.</string>
     <string name="chat_persona_maya">Maya</string>
     <string name="chat_persona_teacher">Teacher</string>
     <string name="chat_source_laptop">Laptop</string>

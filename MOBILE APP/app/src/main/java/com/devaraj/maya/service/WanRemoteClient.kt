@@ -2,17 +2,25 @@ package com.devaraj.maya.service
 
 import android.content.Context
 import android.util.Log
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
+import okio.ByteString.Companion.toByteString
 import java.security.KeyStore
 import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
@@ -22,7 +30,7 @@ import javax.net.ssl.X509TrustManager
 
 /**
  * WAN Remote Client - connects to relay server via WebSocket Secure (WSS)
- * 
+ *
  * Phone → Relay Server (WSS) → Laptop
  * TLS 1.3 with certificate pinning
  */
@@ -30,7 +38,7 @@ class WanRemoteClient(
     private val context: Context,
     private val relayUrl: String,
     private val certPinSha256: String,
-    private val pairingToken: String
+    private val pairingToken: String,
 ) {
     private val _state = MutableStateFlow<WanState>(WanState.Disconnected)
     val state = _state.asStateFlow()
@@ -71,7 +79,6 @@ class WanRemoteClient(
             client = OkHttpClient.Builder()
                 .sslSocketFactory(sslContext.socketFactory, trustManager)
                 .build()
-
         } catch (e: Exception) {
             Log.e("WanRemote", "Failed to build TLS client", e)
             _state.value = WanState.Error("TLS setup failed: ${e.message}")
@@ -82,25 +89,27 @@ class WanRemoteClient(
      * Connect to relay server
      */
     fun connect() {
-        client ?: return
+        val activeClient = client ?: return
 
         val url = "$relayUrl/wan/phone?token=$pairingToken&device_id=$deviceId"
         val request = Request.Builder().url(url).build()
 
         _state.value = WanState.Connecting
 
-        client!!.newWebSocket(request, object : WebSocketListener() {
+        activeClient.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
-                WanRemoteClient.this.webSocket = webSocket
+                attach(webSocket)
                 _state.value = WanState.Connected
                 Log.d("WanRemote", "Connected to relay: $relayUrl")
 
                 // Register with relay
-                sendJson(mapOf(
-                    "type" to "register",
-                    "device_id" to deviceId,
-                    "capabilities" to listOf("phone_remote", "chat", "monitor")
-                ))
+                sendJson(
+                    mapOf(
+                        "type" to "register",
+                        "device_id" to deviceId,
+                        "capabilities" to listOf("phone_remote", "chat", "monitor"),
+                    ),
+                )
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
@@ -116,7 +125,7 @@ class WanRemoteClient(
                 _state.value = WanState.Disconnected
             }
 
-            override fun onFailure(webSocket: WebSocket?, t: Throwable, response: Response?) {
+            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 Log.e("WanRemote", "WebSocket failure", t)
                 _state.value = WanState.Error(t.message ?: "Connection failed")
             }
@@ -132,89 +141,106 @@ class WanRemoteClient(
         _state.value = WanState.Disconnected
     }
 
-    /**
-     * Send JSON message
-     */
+    /** Send JSON message */
     fun sendJson(data: Map<String, Any>) {
-        import com.google.gson.Gson
-        val json = Gson().toJson(data)
-        webSocket?.send(json)
+        webSocket?.send(toJsonObject(data).toString())
     }
 
-    /**
-     * Send binary data (screen frames)
-     */
+    /** Send binary data (screen frames) */
     fun sendBinary(data: ByteArray) {
-        webSocket?.send(okio.ByteString.of(data))
+        webSocket?.send(data.toByteString())
     }
 
-    /**
-     * Handle incoming JSON message
-     */
+    /** Handle incoming JSON message */
     private fun handleMessage(text: String) {
-        import com.google.gson.Gson
-        val map = Gson().fromJson(text, Map<String, Any>::class.java)
-        val type = map["type"] as? String ?: return
+        val obj = runCatching { Json.parseToJsonElement(text) as? JsonObject }.getOrNull() ?: return
+        val type = obj["type"]?.jsonPrimitive?.contentOrNull ?: return
 
         when (type) {
             "registered" -> {
-                val wanId = map["wan_id"] as? String
+                val wanId = obj["wan_id"]?.jsonPrimitive?.contentOrNull
                 if (wanId != null) {
                     _state.value = WanState.Connected
-                    events.send(WanEvent.Registered(wanId))
+                    events.trySend(WanEvent.Registered(wanId))
                 }
             }
             "input" -> {
-                val eventsList = map["events"] as? List<*> ?: return
-                events.send(WanEvent.Input(eventsList.map { it as Map<String, Any> }))
+                val list = obj["events"] as? JsonArray ?: return
+                val mapped = list.mapNotNull { element ->
+                    (element as? JsonObject)?.entries
+                        ?.associate { (key, value) -> key to jsonValue(value) }
+                }
+                events.trySend(WanEvent.Input(mapped))
             }
             "screen_ack" -> {
-                val seq = map["seq"] as? Long
-                events.send(WanEvent.ScreenAck(seq ?: 0))
+                val seq = obj["seq"]?.jsonPrimitive?.longOrNull ?: 0L
+                events.trySend(WanEvent.ScreenAck(seq))
             }
             "error" -> {
-                val msg = map["message"] as? String ?: "Unknown error"
-                events.send(WanEvent.Error(msg))
+                val msg = obj["message"]?.jsonPrimitive?.contentOrNull ?: "Unknown error"
+                events.trySend(WanEvent.Error(msg))
             }
-            "pong" -> {
-                // Keep-alive
-            }
+            "pong" -> Unit // Keep-alive
         }
     }
 
-    /**
-     * Handle incoming binary data
-     */
+    /** Handle incoming binary data */
     private fun handleBinary(data: ByteArray) {
-        events.send(WanEvent.BinaryData(data))
+        events.trySend(WanEvent.BinaryData(data))
     }
 
-    /**
-     * Send screen frame
-     */
+    /** Send screen frame */
     fun sendScreenFrame(frame: ByteArray, seq: Long) {
-        sendJson(mapOf(
-            "type" to "screen",
-            "data" to android.util.Base64.encodeToString(frame, android.util.Base64.NO_WRAP),
-            "seq" to seq
-        ))
+        sendJson(
+            mapOf(
+                "type" to "screen",
+                "data" to android.util.Base64.encodeToString(frame, android.util.Base64.NO_WRAP),
+                "seq" to seq,
+            ),
+        )
     }
 
-    /**
-     * Send input events
-     */
+    /** Send input events */
     fun sendInput(eventsList: List<Map<String, Any>>) {
-        sendJson(mapOf(
-            "type" to "input",
-            "events" to eventsList
-        ))
+        sendJson(
+            mapOf(
+                "type" to "input",
+                "events" to eventsList,
+            ),
+        )
     }
 
-    /**
-     * Send ping
-     */
+    /** Send ping */
     fun sendPing() {
         sendJson(mapOf("type" to "ping"))
+    }
+
+    private fun attach(socket: WebSocket) {
+        webSocket = socket
+    }
+
+    private fun toJsonObject(data: Map<String, Any>): JsonObject =
+        JsonObject(data.entries.associate { (key, value) -> key to toJsonElement(value) })
+
+    private fun toJsonElement(value: Any?): JsonElement = when (value) {
+        null -> JsonNull
+        is JsonElement -> value
+        is String -> JsonPrimitive(value)
+        is Boolean -> JsonPrimitive(value)
+        is Number -> JsonPrimitive(value)
+        is Map<*, *> -> JsonObject(
+            value.entries.associate { (key, entry) -> key.toString() to toJsonElement(entry) },
+        )
+        is Iterable<*> -> JsonArray(value.map { toJsonElement(it) })
+        else -> JsonPrimitive(value.toString())
+    }
+
+    private fun jsonValue(element: JsonElement): Any = when (element) {
+        is JsonObject -> element.entries.associate { (key, value) -> key to jsonValue(value) }
+        is JsonArray -> element.map { jsonValue(it) }
+        is JsonNull -> ""
+        is JsonPrimitive ->
+            element.booleanOrNull ?: element.longOrNull ?: element.contentOrNull ?: ""
     }
 }
 

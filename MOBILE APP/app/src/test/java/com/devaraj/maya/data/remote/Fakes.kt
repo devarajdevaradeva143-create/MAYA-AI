@@ -139,4 +139,7 @@ open class FakeMayaApi : MayaApi {
 
     override suspend fun hybridRelease(): HybridStatusDto =
         throw UnsupportedOperationException("hybridRelease not stubbed")
+
+    override suspend fun deviceStatus(body: DeviceStatusRequest): DeviceStatusResponse =
+        throw UnsupportedOperationException("deviceStatus not stubbed")
 }

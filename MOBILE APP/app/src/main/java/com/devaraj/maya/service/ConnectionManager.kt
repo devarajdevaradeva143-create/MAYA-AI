@@ -184,13 +184,11 @@ class ConnectionManager(
         disconnect()
     }
 
-    data class ModeConfig(
-        val extra: Map<String, String> = emptyMap()
-    )
+    open class ModeConfig
 
     data class WanConfig(
         val relayUrl: String,
         val certPinSha256: String,
-        val pairingToken: String
+        val pairingToken: String,
     ) : ModeConfig()
 }

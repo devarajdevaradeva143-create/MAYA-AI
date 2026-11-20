@@ -441,7 +441,7 @@ class ChatViewModel(
     companion object {
         private const val FLUSH_INTERVAL_MS = 250L
         private const val SOCKET_WAIT_MS = 3_000L
-        private const val LOCAL_MODEL_NAME = "Qwen3 1.7B Q4_K_M"
+        private const val LOCAL_MODEL_NAME = OnDeviceModelManager.MODEL_DISPLAY_NAME
 
         /**
          * Pure helper: builds the wa.me URL with properly URL-encoded text.

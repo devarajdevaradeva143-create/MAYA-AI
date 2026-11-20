@@ -280,7 +280,7 @@ fun SettingsScreen(
 
         Text(text = "Phone model (Phase 9)", style = MaterialTheme.typography.titleMedium)
         Text(
-            text = "Offline fallback: Qwen3 1.7B Instruct Q4_K_M (about 1.2 GB). " +
+            text = "Offline fallback: tamil-lm-2b Instruct Q4_K_M (about 1.3 GB, Tamil/Tanglish). " +
                 "Import a .gguf file; it stays in private app storage.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,

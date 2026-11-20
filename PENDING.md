@@ -13,7 +13,7 @@
 - **Git**: HEAD `c5108a6`; AI-only fixes applied on top (uncommitted).
 - **OpenJarvis**: untouched (read-only), clean.
 - **Mobile app**: Phases 0-12 + remote screen/input/files + HYBRID control bus implemented. `assembleDebug` and `testDebugUnitTest` both pass. Physical on-device tests verified (pairing, chat, teacher, laptop control, monitor, remote session, NSD discovery). Lint clean.
-- **Model**: Qwen 3B (laptop); tamil-lm-2b switch deferred by user.
+- **Model**: Qwen 3B (laptop, Lemonade FLM); phone on-device model switched to tamil-lm-2b (20 Nov).
 
 ---
 
@@ -44,7 +44,7 @@
 | 3 | Phase 11 USB/BT manual test | Not run |
 | 4 | Physical remote-control test | Screen/input/files exercised on Infinix X6857B ✅ (verified) |
 | 5 | Internet/WAN remote | Milestones 1–2 done; relay deploy/TLS = user action |
-| 7 | Model switch to tamil-lm-2b | Deferred by user (currently Qwen3 1.7B) |
+| 7 | Model switch to tamil-lm-2b | ✅ Done (20 Nov) — `OnDeviceModelManager` points at `tamil-lm-2b-instruct-q4_k_m.gguf` (~1.3 GB); a previously imported Qwen3 1.7B file still loads and is deleted on the next import. Physical on-device reply test pending (user). |
 | 8 | Maya AI-drafted WhatsApp message | ✅ Implemented — "Send to WhatsApp" prefill via `wa.me` + `ACTION_VIEW`; user picks contact and presses Send |
 
 ## 4. Cross-cutting pending (laptop)
@@ -105,7 +105,7 @@
 ## 8. Suggested next steps (pick one)
 
 1. `mobile phase 9` — on-device model test (airplane mode, cancel, unload, tok/s)
-2. `tamil-lm-2b` — laptop model switch
+2. ~~`tamil-lm-2b` — phone on-device model switch~~ (done 20 Nov)
 3. ~~`os autostart` — Windows boot autostart~~ (done)
 4. `tamil stt` / `tamil tts` — language support
 5. `teacher ai lessons` — AI-generated English lessons

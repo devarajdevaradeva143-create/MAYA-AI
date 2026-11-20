@@ -9,7 +9,6 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
-import android.os.Build
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -17,6 +16,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.util.UUID
 
 /**
  * Bluetooth PAN Remote Service
@@ -41,9 +41,9 @@ class BluetoothRemoteService(
     private val connectionEvents = Channel<BluetoothEvent>(100)
 
     // PAN UUIDs
-    private val PAN_UUID = "00001115-0000-1000-8000-00805f9b34fb" // PANU
-    private val NAP_UUID = "00001116-0000-1000-8000-00805f9b34fb" // NAP
-    private val RFCOMM_UUID = "00001101-0000-1000-8000-00805f9b34fb" // SPP
+    private val PAN_UUID: UUID = UUID.fromString("00001115-0000-1000-8000-00805f9b34fb") // PANU
+    private val NAP_UUID: UUID = UUID.fromString("00001116-0000-1000-8000-00805f9b34fb") // NAP
+    private val RFCOMM_UUID: UUID = UUID.fromString("00001101-0000-1000-8000-00805f9b34fb") // SPP
 
     companion object {
         const val PAN_PORT = 8420
@@ -61,13 +61,10 @@ class BluetoothRemoteService(
 
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                // Start PAN server socket
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    panServerSocket = bluetoothAdapter.listenUsingInsecureL2capChannel(PAN_UUID)
-                } else {
-                    @Suppress("DEPRECATION")
-                    panServerSocket = bluetoothAdapter.listenUsingRfcommWithServiceRecord("Maya PAN", PAN_UUID)
-                }
+                // Start PAN server socket (Android exposes PAN over RFCOMM only)
+                @Suppress("DEPRECATION")
+                panServerSocket = bluetoothAdapter
+                    .listenUsingInsecureRfcommWithServiceRecord("Maya PAN", PAN_UUID)
 
                 _state.value = BluetoothState.Listening("PAN")
 
@@ -93,7 +90,8 @@ class BluetoothRemoteService(
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 @Suppress("DEPRECATION")
-                rfcommServerSocket = bluetoothAdapter.listenUsingRfcommWithServiceRecord("Maya RFCOMM", RFCOMM_UUID)
+                rfcommServerSocket = bluetoothAdapter
+                    .listenUsingInsecureRfcommWithServiceRecord("Maya RFCOMM", RFCOMM_UUID)
 
                 while (true) {
                     val socket = rfcommServerSocket?.accept() ?: break
@@ -115,7 +113,7 @@ class BluetoothRemoteService(
         CoroutineScope(Dispatchers.IO).launch {
             connectionEvents.send(BluetoothEvent.Connected(socket.remoteDevice))
             connection.readLoop { data ->
-                connectionEvents.send(BluetoothEvent.Data(socket.remoteDevice, data))
+                connectionEvents.trySend(BluetoothEvent.Data(socket.remoteDevice, data))
             }
             connectionEvents.send(BluetoothEvent.Disconnected(socket.remoteDevice))
             activeConnections.remove(socket.remoteDevice.address)
@@ -136,11 +134,8 @@ class BluetoothRemoteService(
 
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val socket = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    device.createInsecureL2capChannel(PAN_UUID)
-                } else {
-                    device.createRfcommSocketToServiceRecord(PAN_UUID)
-                }
+                @Suppress("DEPRECATION")
+                val socket = device.createInsecureRfcommSocketToServiceRecord(PAN_UUID)
 
                 socket.connect()
                 val connection = BluetoothConnection(socket, "PAN")
@@ -149,7 +144,7 @@ class BluetoothRemoteService(
                 _state.value = BluetoothState.Connected(device.name ?: device.address)
 
                 connection.readLoop { data ->
-                    connectionEvents.send(BluetoothEvent.Data(device, data))
+                    connectionEvents.trySend(BluetoothEvent.Data(device, data))
                 }
                 connectionEvents.send(BluetoothEvent.Disconnected(device))
                 activeConnections.remove(device.address)

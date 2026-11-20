@@ -46,9 +46,22 @@ class OnDeviceModelManager(private val context: Context) {
 
     val modelDir: File = File(context.filesDir, "models").apply { mkdirs() }
 
-    val expectedModelName: String = "qwen3-1.7b-instruct-q4_k_m.gguf"
+    val expectedModelName: String = MODEL_FILE_NAME
 
+    /** Import target: always the current model name. */
     val modelFile: File get() = File(modelDir, expectedModelName)
+
+    /**
+     * The file the app should actually use. A model imported before the
+     * tamil-lm-2b switch keeps working instead of showing "not installed";
+     * it is replaced on the next import.
+     */
+    private val activeModelFile: File
+        get() = modelFile.takeIf { it.exists() }
+            ?: LEGACY_MODEL_FILE_NAMES.asSequence()
+                .map { File(modelDir, it) }
+                .firstOrNull { it.exists() }
+            ?: modelFile
 
     private val nativeLock = ReentrantLock()
 
@@ -61,7 +74,7 @@ class OnDeviceModelManager(private val context: Context) {
     private val _status = MutableStateFlow(readStatus())
     val status: StateFlow<ModelStatus> = _status.asStateFlow()
 
-    val modelPath: String? get() = if (_status.value.valid) modelFile.absolutePath else null
+    val modelPath: String? get() = if (_status.value.valid) activeModelFile.absolutePath else null
 
     val isInstalled: Boolean get() = _status.value.valid
 
@@ -80,7 +93,8 @@ class OnDeviceModelManager(private val context: Context) {
                 if (current.error != null) append(" · ${current.error}")
             }
             current.installed -> "Model file invalid: ${current.error ?: "unknown error"}"
-            else -> "Model not installed. Import a Qwen3 1.7B Q4_K_M GGUF (about 1.2 GB)."
+            else ->
+                "Model not installed. Import a $MODEL_DISPLAY_NAME GGUF (about $MODEL_APPROX_SIZE)."
         }
     }
 
@@ -138,6 +152,8 @@ class OnDeviceModelManager(private val context: Context) {
             if (!temp.renameTo(target)) {
                 throw IOException("Could not save the model file")
             }
+            // The legacy model is no longer used; free its ~1.1 GB.
+            LEGACY_MODEL_FILE_NAMES.forEach { File(modelDir, it).delete() }
             loadedPath = null
             val next = refresh()
             if (!next.valid) throw IOException(next.error ?: "Model verification failed")
@@ -155,6 +171,7 @@ class OnDeviceModelManager(private val context: Context) {
         }
         File(modelDir, "$expectedModelName.part").delete()
         val deleted = modelFile.delete()
+        LEGACY_MODEL_FILE_NAMES.forEach { File(modelDir, it).delete() }
         loadedPath = null
         refresh()
         return deleted || !modelFile.exists()
@@ -231,7 +248,7 @@ class OnDeviceModelManager(private val context: Context) {
     }
 
     private fun readStatus(): ModelStatus {
-        val file = modelFile
+        val file = activeModelFile
         if (!file.exists()) {
             loadedPath = null
             return ModelStatus()
@@ -279,6 +296,14 @@ class OnDeviceModelManager(private val context: Context) {
     }.getOrDefault(false)
 
     companion object {
+        /** Current phone model: tamil-lm-2b (Qwen3.5-2B tuned for Tamil/Tanglish). */
+        const val MODEL_FILE_NAME = "tamil-lm-2b-instruct-q4_k_m.gguf"
+        const val MODEL_DISPLAY_NAME = "tamil-lm-2b Instruct Q4_K_M"
+        const val MODEL_APPROX_SIZE = "1.3 GB"
+
+        /** Models imported before the switch: still loadable, replaced on import. */
+        private val LEGACY_MODEL_FILE_NAMES = listOf("qwen3-1.7b-instruct-q4_k_m.gguf")
+
         /** Small GGUFs (0.6B) are still valid; this rejects thumbnails/partials. */
         const val MIN_MODEL_BYTES = 50L * 1024L * 1024L
 

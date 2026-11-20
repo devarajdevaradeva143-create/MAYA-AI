@@ -39,7 +39,7 @@ Maya AI mobile app — Android phone-la run aagum personal assistant.
 Three jobs:
 
 1. **Laptop remote** — WiFi / USB / Bluetooth-la laptop Maya AI-ah use pannum (full Qwen 3B power).
-2. **Phone AI** — laptop illa-na phone-la Qwen3 1.7B (offline fallback).
+2. **Phone AI** — laptop illa-na phone-la tamil-lm-2b 2B (offline fallback).
 3. **Phone + laptop control** — chat command moolam apps, files, messages, system.
 
 Maya = **command only**. Thana ethuvum pannadhu ❌.
@@ -57,7 +57,7 @@ Maya = **command only**. Thana ethuvum pannadhu ❌.
 | UI | Jetpack Compose + Material 3 |
 | App UI language | English |
 | Themes | Dark + Light + System |
-| Phone model | Qwen3 1.7B Instruct (Q4_K_M GGUF) |
+| Phone model | tamil-lm-2b Instruct (Q4_K_M GGUF) |
 | Laptop model | Qwen 3B |
 | Connection | WiFi + Bluetooth + USB |
 | Internet remote | **Ippo venam** ❌ |
@@ -107,7 +107,7 @@ Maya = **command only**. Thana ethuvum pannadhu ❌.
 │      │                                     │
 │  Data: Room + DataStore + Keystore         │
 │                                            │
-│  Local AI: llama.cpp JNI (Qwen3 1.7B)      │
+│  Local AI: llama.cpp JNI (tamil-lm-2b 2B)  │
 │  Voice: SpeechRecognizer + Android TTS     │
 │         + Piper (sherpa-onnx)              │
 │  Service: foreground mic / wake            │
@@ -1368,8 +1368,11 @@ Wake triggers phone-la:
 
 ### 17.1 Model
 
-- Qwen3 1.7B Instruct, Q4_K_M GGUF (~1.1 GB).
-- Location: `filesDir/models/qwen3-1.7b-instruct-q4_k_m.gguf`.
+- tamil-lm-2b Instruct (`Timegravity/tamil-lm-2b-instruct`), Q4_K_M GGUF
+  (~1.3 GB). Qwen3.5-2B base tuned for Tamil / Tanglish.
+- Location: `filesDir/models/tamil-lm-2b-instruct-q4_k_m.gguf`.
+- A model imported before this switch (`qwen3-1.7b-instruct-q4_k_m.gguf`) is
+  still loadable and is deleted on the next import.
 - Import via SAF (user downloads on laptop, transfers via USB).
 - Verify: file size > 500 MB + GGUF magic `GGUF`.
 - Delete option in Settings.
@@ -2024,7 +2027,7 @@ Native deps (Phase 9):
 | Bluetooth transport | No standard HTTP over BT | Use BT PAN (manual); RFCOMM v2 |
 | llama.cpp build complexity | Phase 9 delay | Laptop-first MVP; Phase 9 independent |
 | Piper AAR availability | Tamil TTS missing | Android TTS fallback |
-| Qwen3 1.7B RAM | Low-end phones | 6 GB recommendation, unload on trim |
+| tamil-lm-2b RAM | Low-end phones | 6 GB recommendation, unload on trim |
 | Cleartext HTTP LAN | Sniffing risk | Trusted LAN only; TLS v2 |
 | QUERY_ALL_PACKAGES | Play policy (sideload only) | Not for Play Store |
 | Android 16 SMS permissions | Limited default-SMS role | Sideload + runtime grant |
