@@ -84,6 +84,7 @@ def clear_translation_cache() -> None:
     _translation_cache.clear()
 
 
+
 # ── Language detection ─────────────────────────────────────────────────────
 
 
@@ -237,518 +238,6 @@ def detect_language(text: str) -> Dict[str, Any]:
         }
     )
 
-
-# ── Translation core (LOCAL engine only) ─────────────────────────────────
-
-
-def _normalize_lang(value: str) -> str:
-    """Normalize a language argument to its canonical name."""
-    key = str(value).strip().lower()
-    try:
-        return _LANG_ALIASES[key]
-    except KeyError:
-        supported = ", ".join(sorted(_LANG_ALIASES))
-        raise ValueError(
-            f"unsupported language {value!r}; use one of: {supported}"
-        ) from None
-
-
-def _unavailable(reason: str) -> str:
-    """Build an honest, single-line ``[translation unavailable]`` reply."""
-    reason = " ".join(str(reason).split()) or "local engine is not available"
-    if len(reason) > 200:
-        reason = reason[:197] + "..."
-    return f"{UNAVAILABLE_PREFIX} {reason}"
-
-
-def translate(
-    text: str,
-    target_lang: str,
-    source_lang: str | None = None,
-    engine: Any | None = None,
-) -> str:
-    """Translate ``text`` with the LOCAL engine.
-
-    Args:
-        text: Text to translate.
-        target_lang: ``"ta"``/``"tamil"``, ``"en"``/``"english"`` or
-            ``"tanglish"``.
-        source_lang: Same accepted values, or ``None`` to auto-detect with
-            :func:`detect_language`.
-        engine: Optional object with ``chat(messages) -> str``. When omitted,
-            the local bridge (``custom.engine.bridge.bridge``) is used lazily.
-
-    Returns:
-        The translated text, or a string starting with
-        ``"[translation unavailable]"`` when the local engine is unreachable,
-        errors, or returns an unusable reply. Failures are returned instead of
-        raised so callers always have something safe to show the user.
-
-    Raises:
-        ValueError: If a language argument is not supported.
-
-    Empty input returns ``""``. When source and target are the same language,
-    the text is returned unchanged and the engine is never called.
-    """
-    target = _normalize_lang(target_lang)
-    if not text or not text.strip():
-        return ""
-
-    if source_lang is None:
-        detected = detect_language(text)["primary"]
-        if str(detected) == "unknown" or detected == "unknown":
-            return _unavailable("could not detect the source language")
-        source = _normalize_lang(str(detected))
-    else:
-        source = _normalize_lang(source_lang)
-
-    if source == target:
-        return text
-
-    # LRU cache check
-    key = _cache_key(text, source, target)
-    cached = _translation_cache.get(key)
-    if cached is not None:
-        # move to end (most recently used)
-        _translation_cache[key] = _translation_cache.pop(key)
-        return cached
-
-    messages = [{"role": "user", "content": _build_prompt(text, source, target)}]
-
-    try:
-        reply = _resolve_engine(engine).chat(messages)
-    except Exception as exc:
-        return _unavailable(f"{type(exc).__name__}: {exc}")
-
-    if not isinstance(reply, str):
-        return _unavailable("engine returned a non-text reply")
-
-    reply = reply.strip()
-    if reply.startswith(UNAVAILABLE_PREFIX):
-        return reply
-    if reply.startswith("[engine error]"):
-        return _unavailable(reply[len("[engine error]") :])
-
-    cleaned = _clean_translation(reply)
-    if not cleaned:
-        return _unavailable("engine returned an empty translation")
-
-    # Store in LRU cache
-    _translation_cache[key] = cleaned
-    if len(_translation_cache) > _MAX_CACHE_SIZE:
-        oldest = next(iter(_translation_cache))
-        del _translation_cache[oldest]
-
-    return cleaned
-
-
-def _build_prompt(text: str, source: str, target: str) -> str:
-    """Build the strict translation prompt sent to the local engine."""
-    return _PROMPT_TEMPLATE.format(
-        source=_LANG_DISPLAY[source],
-        target=_LANG_DISPLAY[target],
-        delimiter=source.upper(),
-        text=text,
-    )
-
-
-_PROMPT_TEMPLATE = (
-    "You are a precise translation engine. Translate the {source} text below "
-    "into {target}.\n"
-    "Return ONLY the translation, no notes, no quotes, no transliteration.\n\n"
-    "--- BEGIN {delimiter} TEXT ---\n"
-    "{text}\n"
-    "--- END {delimiter} TEXT ---"
-)
-
-
-_QUIET_PREFIXES = frozenset({"```", "`", "\"", ">"})
-
-
-def _strip_wrapping_quotes(text: str) -> str:
-    """Remove matching quote/backtick pairs around the whole reply."""
-    while len(text) >= 2 and _QUOTE_PAIRS.get(text[0]) == text[-1]:
-        text = text[1:-1].strip()
-    return text
-
-
-_QUOTE_PAIRS = {
-    '"': '"',
-    "'": "'",
-    "`": "`",
-    ">": ">",
-    "\u201c": "\u201d",  # “ ”
-    "\u2018": "\u2019",  # ‘ ’
-}
-
-
-def _clean_translation(reply: str) -> str:
-    """Clean a raw engine reply into plain translated text."""
-    text = reply.strip()
-
-    # Model may wrap the answer in a Markdown code fence.
-    if text.startswith("```"):
-        text = _FENCE_OPEN_RE.sub("", text, count=1)
-        text = _FENCE_CLOSE_RE.sub("", text, count=1)
-        text = text.strip()
-
-    # Peel decoration layers (label → quotes → bold) until stable.
-    for _ in range(3):
-        before = text
-        text = _LABEL_RE.sub("", text, count=1).strip()
-        text = _strip_wrapping_quotes(text)
-        if len(text) >= 4 and text.startswith("**") and text.endswith("**"):
-            text = text[2:-2].strip()
-        if text == before:
-            break
-
-    text = _MULTI_BLANK_RE.sub("\n\n", text)
-    return text.strip()
-
-
-def _normalize_script(value: Any) -> str | None:
-    if value is None:
-        return None
-    v = str(value).strip().lower()
-    mapping = {
-        "ta": "tamil",
-        "tam": "tamil",
-        "tamil": "tamil",
-        "ta-latn": "latin",
-        "ta_latn": "latin",
-        "tanglish": "latin",
-        "romanized": "latin",
-        "roman": "latin",
-        "lat": "latin",
-        "latin": "latin",
-        "latn": "latin",
-        "en": "latin",
-        "english": "latin",
-        "hi": "devanagari",
-        "hin": "devanagari",
-        "hindi": "devanagari",
-        "hi-latn": "latin",
-        "hinglish": "latin",
-        "dev": "devanagari",
-        "devanagari": "devanagari",
-        "nagari": "devanagari",
-    }
-    return mapping.get(v, v)
-
-
-def _transliterate_tamil_to_latin(text: str) -> str:
-    return "".join(_TAMIL_TO_LATIN.get(ch, ch) for ch in text)
-
-
-def _transliterate_devanagari_to_latin(text: str) -> str:
-    return "".join(_DEVANAGARI_TO_LATIN.get(ch, ch) for ch in text)
-
-
-def _greedy_reverse(text: str, table: Dict[str, str]) -> str:
-    keys = sorted(table.keys(), key=len, reverse=True)
-    result: list[str] = []
-    i = 0
-    n = len(text)
-    lower = text.lower()
-    while i < n:
-        if not lower[i].isalpha() and lower[i] not in (" ",):
-            result.append(text[i])
-            i += 1
-            continue
-        matched = False
-        for key in keys:
-            if key and lower.startswith(key, i):
-                result.append(table[key])
-                i += len(key)
-                matched = True
-                break
-        if not matched:
-            result.append(text[i])
-            i += 1
-    return "".join(result)
-
-
-def _transliterate_latin_to_tamil(text: str) -> str:
-    return _greedy_reverse(text, _LATIN_TO_TAMIL)
-
-
-def _transliterate_latin_to_devanagari(text: str) -> str:
-    return _greedy_reverse(text, _LATIN_TO_DEVANAGARI)
-
-
-def transliterate(
-    text: str,
-    source: Any = None,
-    target: Any = None,
-    *,
-    source_script: Any = None,
-    target_script: Any = None,
-    source_lang: Any = None,
-    target_lang: Any = None,
-    from_script: Any = None,
-    to_script: Any = None,
-    from_lang: Any = None,
-    to_lang: Any = None,
-    direction: Any = None,
-    script: Any = None,
-    engine: Any | None = None,
-    **kwargs: Any,
-) -> str:
-    """Transliterate text between scripts (ta↔lat, hi↔lat).
-
-    Flexible signature: positional ``source``/``target`` or keyword variants
-    (``source_script``, ``target_script``, ``from_script``, ``to_script``, ...)
-    are all accepted. When omitted, the source script is inferred from the
-    text and the target defaults to Latin.
-    """
-    # Collect from kwargs
-    for k, v in kwargs.items():
-        kl = str(k).lower()
-        if any(tok in kl for tok in ("source", "from", "src", "input")):
-            if source is None and source_script is None and source_lang is None and from_script is None and from_lang is None:
-                source = v
-        elif any(tok in kl for tok in ("target", "to", "dst", "output", "dest")):
-            if target is None and target_script is None and target_lang is None and to_script is None and to_lang is None:
-                target = v
-        elif "direction" in kl:
-            direction = v
-        elif "script" in kl:
-            script = v
-
-    if direction is not None:
-        parts = re.split(r"[^a-zA-Z0-9]+", str(direction))
-        parts = [p for p in parts if p]
-        if len(parts) >= 2:
-            if source is None:
-                source = parts[0]
-            if target is None:
-                target = parts[1]
-
-    if script is not None and source is None and target is None:
-        parts = re.split(r"[^a-zA-Z0-9]+", str(script))
-        parts = [p for p in parts if p]
-        if len(parts) >= 2:
-            source, target = parts[0], parts[1]
-        else:
-            # single token like "ta2lat"
-            m = re.match(r"^([a-zA-Z]+)[^a-zA-Z]+([a-zA-Z]+)$", str(script))
-            if m:
-                source, target = m.group(1), m.group(2)
-
-    src_val = source
-    if src_val is None:
-        src_val = source_script
-    if src_val is None:
-        src_val = source_lang
-    if src_val is None:
-        src_val = from_script
-    if src_val is None:
-        src_val = from_lang
-
-    tgt_val = target
-    if tgt_val is None:
-        tgt_val = target_script
-    if tgt_val is None:
-        tgt_val = target_lang
-    if tgt_val is None:
-        tgt_val = to_script
-    if tgt_val is None:
-        tgt_val = to_lang
-
-    # Infer source script from text if not provided
-    if src_val is None:
-        letters = [ch for ch in text if ch.isalpha()]
-        tamil_chars = sum(1 for ch in letters if "\u0B80" <= ch <= "\u0BFF")
-        devanagari_chars = sum(1 for ch in letters if "\u0900" <= ch <= "\u097F")
-        if tamil_chars / max(len(letters), 1) >= 0.3:
-            src_val = "tamil"
-        elif devanagari_chars / max(len(letters), 1) >= 0.3:
-            src_val = "devanagari"
-        else:
-            src_val = "latin"
-
-    if tgt_val is None:
-        src_script = _normalize_script(src_val)
-        if src_script in ("tamil", "devanagari"):
-            tgt_val = "latin"
-        else:
-            tgt_val = "tamil"
-
-    src_script = _normalize_script(src_val)
-    tgt_script = _normalize_script(tgt_val)
-
-    if src_script == tgt_script:
-        return text
-
-    if src_script == "tamil" and tgt_script == "latin":
-        return _transliterate_tamil_to_latin(text)
-    if src_script == "latin" and tgt_script == "tamil":
-        return _transliterate_latin_to_tamil(text)
-    if src_script == "devanagari" and tgt_script == "latin":
-        return _transliterate_devanagari_to_latin(text)
-    if src_script == "latin" and tgt_script == "devanagari":
-        return _transliterate_latin_to_devanagari(text)
-
-    # Unknown combination — try engine prompt as last resort (offline only)
-    try:
-        prompt = (
-            f"Transliterate the following text from {src_script} script to "
-            f"{tgt_script} script. Return ONLY the transliterated text.\n\n{text}"
-        )
-        reply = _resolve_engine(engine).chat([{"role": "user", "content": prompt}])
-        if isinstance(reply, str) and reply.strip():
-            return reply.strip()
-    except Exception:
-        pass
-    return text
-
-
-# ── Pronunciation guidance ───────────────────────────────────────────────
-
-
-def pronunciation_guide(word: str) -> Dict[str, Any]:
-    if not word:
-        return {"word": "", "syllables": [], "phonetic": ""}
-
-    vowels = "aeiouAEIOU"
-    syllables = []
-    current = ""
-    for ch in word:
-        current += ch
-        if ch in vowels:
-            syllables.append(current)
-            current = ""
-    if current:
-        syllables.append(current)
-
-    return {
-        "word": word,
-        "syllables": syllables,
-        "phonetic": f"/{word}/",
-    }
-
-
-# ── Tanglish converter (simple) ──────────────────────────────────────────
-
-def tanglish_to_english(tanglish: str) -> str:
-    """Simple Tanglish → English conversion (placeholder).
-
-    Tanglish = English words written with Tamil keyboard layout sounds.
-    This is a very basic mapping.
-    """
-    mapping = {
-        "vanakkam": "hello",
-        "enna": "what",
-        "epdi": "how",
-        "eppadi": "where",
-        "irukku": "is",
-        "irukkingu": "are",
-        "nalla": "good",
-        "romba": "very",
-        "seri": "okay",
-        "sari": "yes",
-        "illa": "no",
-        "ille": "no",
-        "thambi": "brother",
-        "thangachi": "sister",
-        "akka": "elder sister",
-        "anna": "elder brother",
-        "machan": "maternal uncle",
-        "machi": "paternal uncle",
-        "poda": "go",
-        "podi": "come",
-        "sollu": "say",
-        "sollunga": "will say",
-        "sonna": "tell",
-        "vandhu": "come",
-        "poitu": "give",
-        "poga": "hit",
-        "inge": "you",
-        "ange": "we",
-        "yaaru": "who",
-        "yaar": "who",
-        "enge": "how",
-        "enga": "what",
-        "aama": "our",
-        "aamaa": "ours",
-        "appo": "this",
-        "ippo": "now",
-        "ipdi": "where",
-        "adhu": "that",
-        "idhu": "this",
-        "avaru": "they",
-        "ival": "that",
-        "enakku": "to me",
-        "unakku": "to you",
-        "unga": "to us",
-    }
-
-    result = tanglish
-    for tamil_word, english_word in mapping.items():
-        result = result.replace(tamil_word, english_word)
-        result = result.replace(tamil_word.capitalize(), english_word.capitalize())
-
-    return f"[tanglish] Input: '{tanglish}' → Mapped: '{result}' (basic mapping only)"
-
-
-def english_to_tanglish(english: str) -> str:
-    """Simple English → Tanglish conversion (placeholder).
-
-    Maps common English words to their Tamil-sounding versions.
-    """
-    mapping = {
-        "hello": "vanakkam",
-        "what": "enna",
-        "how": "epdi",
-        "where": "eppadi",
-        "is": "irukku",
-        "are": "irukkingu",
-        "good": "nalla",
-        "very": "romba",
-        "okay": "seri",
-        "yes": "sari",
-        "no": "illa",
-        "no": "ille",
-        "brother": "thambi",
-        "sister": "thangachi",
-        "elder sister": "akka",
-        "elder brother": "anna",
-        "maternal uncle": "machan",
-        "paternal uncle": "machi",
-        "go": "poda",
-        "come": "podi",
-        "say": "sollu",
-        "will say": "sollunga",
-        "tell": "sonna",
-        "come": "vandhu",
-        "give": "poitu",
-        "hit": "poga",
-        "you": "inge",
-        "we": "ange",
-        "who": "yaaru",
-        "who": "yaar",
-        "how": "enge",
-        "what": "enga",
-        "our": "aama",
-        "ours": "aamaa",
-        "this": "appo",
-        "now": "ippo",
-        "where": "ipdi",
-        "that": "adhu",
-        "this": "idhu",
-        "they": "avaru",
-        "that": "ival",
-        "to me": "enakku",
-        "to you": "unakku",
-        "to us": "unga",
-    }
-
-    result = english
-    for english_word, tamil_word in mapping.items():
-        result = result.replace(english_word, tamil_word)
-        result = result.replace(english_word.capitalize(), tamil_word.capitalize())
-
-    return f"[tanglish] Input: '{english}' → Mapped: '{result}' (basic mapping only)"
 
 
 # ── Config helper (settings.yaml) ────────────────────────────────────────
@@ -1342,11 +831,39 @@ def pronunciation_guide(word: str) -> Dict[str, Any]:
 
 # ── Tanglish converter (simple) ──────────────────────────────────────────
 
-def tanglish_to_english(tanglish: str) -> str:
-    """Simple Tanglish → English conversion (placeholder).
+def _apply_word_map(text: str, mapping: dict) -> str:
+    """Longest-match, case-insensitive replacement of mapped words/phrases.
 
-    Tanglish = English words written with Tamil keyboard layout sounds.
-    This is a very basic mapping.
+    Words/phrases present in ``mapping`` are replaced by their mapped value;
+    anything not in the map is left untouched. Multi-word keys are honoured.
+    """
+    if not text or not mapping:
+        return text if text is not None else ""
+    norm_map = {str(k).lower(): v for k, v in mapping.items()}
+    keys = sorted(norm_map, key=len, reverse=True)
+    try:
+        pattern = re.compile(
+            r"(?<!\\w)(" + "|".join(re.escape(k) for k in keys) + r")(?![\\w])",
+            re.IGNORECASE,
+        )
+    except re.error:
+        return text
+    def repl(m):
+        val = norm_map.get(m.group(0).lower(), m.group(0))
+        if not isinstance(val, str):
+            val = str(val)
+        if m.group(0)[:1].isupper() and val:
+            val = val[0].upper() + val[1:]
+        return val
+    return pattern.sub(repl, text)
+
+
+def tanglish_to_english(tanglish: str) -> str:
+    """Convert a Tanglish (romanised Tamil) string to English.
+
+    Uses a longest-match, case-insensitive word/phrase map. Words that are not
+    in the map are left unchanged. This is a best-effort, dictionary-based
+    conversion (not a full translation).
     """
     mapping = {
         "vanakkam": "hello",
@@ -1395,18 +912,15 @@ def tanglish_to_english(tanglish: str) -> str:
         "unga": "to us",
     }
 
-    result = tanglish
-    for tamil_word, english_word in mapping.items():
-        result = result.replace(tamil_word, english_word)
-        result = result.replace(tamil_word.capitalize(), english_word.capitalize())
-
-    return f"[tanglish] Input: '{tanglish}' → Mapped: '{result}' (basic mapping only)"
+    return _apply_word_map(tanglish, mapping)
 
 
 def english_to_tanglish(english: str) -> str:
-    """Simple English → Tanglish conversion (placeholder).
+    """Convert an English string to Tanglish (romanised Tamil).
 
-    Maps common English words to their Tamil-sounding versions.
+    Uses a longest-match, case-insensitive word/phrase map. Words that are not
+    in the map are left unchanged. This is a best-effort, dictionary-based
+    conversion (not a full translation).
     """
     mapping = {
         "hello": "vanakkam",
@@ -1455,12 +969,7 @@ def english_to_tanglish(english: str) -> str:
         "to us": "unga",
     }
 
-    result = english
-    for english_word, tamil_word in mapping.items():
-        result = result.replace(english_word, tamil_word)
-        result = result.replace(english_word.capitalize(), tamil_word.capitalize())
-
-    return f"[tanglish] Input: '{english}' → Mapped: '{result}' (basic mapping only)"
+    return _apply_word_map(english, mapping)
 
 
 # ── Config helper (settings.yaml) ────────────────────────────────────────

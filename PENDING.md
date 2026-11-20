@@ -66,6 +66,8 @@
 | WAN Tailscale guide | ✅ Added | `LAPTOP\windows\README.md` + `docs/WAN-REMOTE-DESIGN.md` milestones 1–2 |
 | Fedora remote adapters | ✅ Extended | `HybridAdapter` added to Fedora `remote_service.py`; 5 structural tests pass |
 | WhatsApp prefill | ✅ Verified | Already implemented via `wa.me`; callback wiring repaired |
+| Language.py dedup | ✅ Fixed | Removed ~700 lines of duplicated/dead sections (duplicate translate, pronunciation, tanglish, transliterate, etc.); `detect_language` retained; 431 tests pass |
+| Tanglish converters | ✅ Improved | `tanglish_to_english` / `english_to_tanglish` now use longest-match case-insensitive word/phrase map and return clean mapped text instead of `[tanglish] Input: … (basic mapping only)` wrapper |
 
 > Tamil TTS, Tamil STT and local translation are now DONE (19 Nov) — removed from pending.
 
