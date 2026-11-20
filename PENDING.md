@@ -1,6 +1,6 @@
 # MAYA AI — Pending Work List
 
-> Last updated: 19 Nov 2026
+> Last updated: 19 Nov 2026 (AI-only work pass — see §3a)
 > Scope: everything in `MAYA AI PROJECT\` that is not yet done.
 > Companion: `docs/HANDOFF.md` (current state), `docs/ROADMAP.md` (phase plan).
 
@@ -8,10 +8,11 @@
 
 ## 0. Status snapshot
 
-- **Windows desktop app**: complete for the planned 11 phases + items 2-10 below (240 tests pass, ruff clean, `dist\mayaai.exe` + desktop shortcut working).
-- **Git**: initialized, first commit `11444d7` pushed to `origin/main`.
+- **JARVIS**: 429 tests pass, 1 skipped. Last commit had broken `language.py` (duplicated file, syntax error, missing globals) and an uninitialised teacher DB — both repaired.
+- **Windows desktop app**: complete for the planned 11 phases; server tests pass. `dist\mayaai.exe` + desktop shortcut working.
+- **Git**: HEAD `c5108a6`; AI-only fixes applied on top (uncommitted).
 - **OpenJarvis**: untouched (read-only), clean.
-- **Mobile app**: Phases 0-12 + remote screen/input/files + HYBRID control bus implemented; debug APK rebuilt 19 Nov. Physical on-device tests (airplane mode, USB/BT) still pending.
+- **Mobile app**: Phases 0-12 + remote screen/input/files + HYBRID control bus implemented. `assembleDebug` and `testDebugUnitTest` both pass after repairing Vosk name detection and the WhatsApp callback wiring. Physical on-device tests still pending.
 - **Model**: Qwen 3B (laptop); tamil-lm-2b switch deferred by user.
 
 ---
@@ -39,13 +40,13 @@
 | # | Item | Notes |
 |---|---|---|
 | 1 | Phase 9 on-device model test | Airplane mode reply, cancel, unload, tok/s + RAM measurement (DoD unverified) |
-| 2 | Phase 10 Vosk name detection | Not implemented |
+| 2 | Phase 10 Vosk name detection | ✅ Implemented — `NameWakeDetector` (16 kHz mono Vosk), 3× Maya in 10 s, model import UI. Build + unit tests pass. Physical mic test pending (user) |
 | 3 | Phase 11 USB/BT manual test | Not run |
 | 4 | Physical remote-control test | Screen/input/files exercised on Infinix X6857B (pending) |
-| 5 | Fedora screen/input adapter | Windows only today; Fedora adapter not wired |
-| 6 | Internet/WAN remote | Needs relay + TLS design (LAN/hotspot/USB in v1) |
+| 5 | Fedora screen/input adapter | ⚠️ Adapters implemented + `HybridAdapter` added + structural tests pass; full Fedora phone-server wiring needs the remaining app adapters and on-hardware validation (Fedora access) |
+| 6 | Internet/WAN remote | ⚠️ Milestones 1–2 done (`wan_host`, capabilities, Tailscale guide, config keys, relay buffering fix). Relay deploy/TLS certs = user action |
 | 7 | Model switch to tamil-lm-2b | Deferred by user (currently Qwen3 1.7B) |
-| 8 | Maya AI-drafted WhatsApp message | Not implemented (idea: chat reply → "Send to WhatsApp" prefill) |
+| 8 | Maya AI-drafted WhatsApp message | ✅ Implemented — "Send to WhatsApp" prefill via `wa.me` + `ACTION_VIEW`; user picks contact and presses Send |
 
 ## 4. Cross-cutting pending (laptop + Fedora)
 
@@ -53,8 +54,20 @@
 |---|---|---|
 | 1 | `maya-cloud` live call | Code complete; no key configured. Run `maya-cloud set-key` (see `docs/CLOUD.md`) |
 | 2 | Fedora validation | `maya.service` + `install_service.sh` not run on Fedora hardware |
-| 3 | Knowledge embeddings upgrade | Optional: `minishlab/potion-multilingual-128M` + rebuild index |
+| 3 | Knowledge embeddings upgrade | ⚠️ Code/config supports it; needs ~512 MB model download + reindex with `--reset` (user action) |
 | 4 | Cloud Gemini | Live key pending (user action) |
+
+### 3a. AI-only work completed (19 Nov, second pass)
+
+| Item | Status | Evidence |
+|---|---|---|
+| JARVIS test-suite regressions | ✅ Fixed | `language.py` duplicated/syntax error + missing globals + strict prompt restored; `teacher_service._ensure_schema()` called; translation cache reset fixture. 429 pass / 1 skip |
+| Mobile build regressions | ✅ Fixed | `NameWakeDetector.kt` restored to working Vosk API; `ChatScreen` WhatsApp callback signature fixed. `assembleDebug` + `testDebugUnitTest` pass |
+| WAN relay buffering | ✅ Fixed | Partial/multi-frame `recv()` no longer loses data; 7 WAN tests pass |
+| WAN config keys | ✅ Fixed | `wan.host/relay_url/cert_path/key_path/mode` parsed into `ServerSettings`; `/health` advertises `wan_host` |
+| WAN Tailscale guide | ✅ Added | `LAPTOP\windows\README.md` + `docs/WAN-REMOTE-DESIGN.md` milestones 1–2 |
+| Fedora remote adapters | ✅ Extended | `HybridAdapter` added to Fedora `remote_service.py`; 5 structural tests pass |
+| WhatsApp prefill | ✅ Verified | Already implemented via `wa.me`; callback wiring repaired |
 
 > Tamil TTS, Tamil STT and local translation are now DONE (19 Nov) — removed from pending.
 

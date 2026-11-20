@@ -12,6 +12,8 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, Protocol
 
+from custom.config import load_settings
+
 
 # ── Language normalization ───────────────────────────────────────────────
 
@@ -19,6 +21,18 @@ TAMIL = "tamil"
 ENGLISH = "english"
 HINDI = "hindi"
 TANGLISH = "tanglish"
+
+#: Prefix used by honest "translation unavailable" fallbacks.
+UNAVAILABLE_PREFIX = "[translation unavailable]"
+
+# Reply-cleaning regexes (used by _clean_translation).
+_FENCE_OPEN_RE = re.compile(r"^```[^\n]*\n")
+_FENCE_CLOSE_RE = re.compile(r"\n?```\s*$")
+_LABEL_RE = re.compile(
+    r"^\s*(?:\*\*)?translation(?:\s*\([^)]*\))?\s*[:\-\u2013\u2014]\s*(?:\*\*)?\s*",
+    re.IGNORECASE,
+)
+_MULTI_BLANK_RE = re.compile(r"\n{3,}")
 
 #: ISO 639-1 codes for supported languages
 ISO_LANG_CODES: Dict[str, str] = {
@@ -313,7 +327,7 @@ def translate(
     if reply.startswith(UNAVAILABLE_PREFIX):
         return reply
     if reply.startswith("[engine error]"):
-        return _unavailable(reply[len("[engine error)" : "])])
+        return _unavailable(reply[len("[engine error]") :])
 
     cleaned = _clean_translation(reply)
     if not cleaned:
@@ -338,7 +352,14 @@ def _build_prompt(text: str, source: str, target: str) -> str:
     )
 
 
-_PROMPT_TEMPLATE = '{delimiter} Translate the following from {source} to {target}:\n\n{text}'
+_PROMPT_TEMPLATE = (
+    "You are a precise translation engine. Translate the {source} text below "
+    "into {target}.\n"
+    "Return ONLY the translation, no notes, no quotes, no transliteration.\n\n"
+    "--- BEGIN {delimiter} TEXT ---\n"
+    "{text}\n"
+    "--- END {delimiter} TEXT ---"
+)
 
 
 _QUIET_PREFIXES = frozenset({"```", "`", "\"", ">"})
@@ -356,6 +377,8 @@ _QUOTE_PAIRS = {
     "'": "'",
     "`": "`",
     ">": ">",
+    "\u201c": "\u201d",  # “ ”
+    "\u2018": "\u2019",  # ‘ ’
 }
 
 
@@ -744,6 +767,19 @@ def get_language_settings() -> dict:
     }
 
 
+# ── Convenience translation wrappers ──────────────────────────────────────
+
+
+def translate_tamil_to_english(text: str, engine: Any | None = None) -> str:
+    """Translate Tamil text to English using the local engine."""
+    return translate(text, ENGLISH, TAMIL, engine=engine)
+
+
+def translate_english_to_tamil(text: str, engine: Any | None = None) -> str:
+    """Translate English text to Tamil using the local engine."""
+    return translate(text, TAMIL, ENGLISH, engine=engine)
+
+
 # ── Compatibility helpers ──────────────────────────────────────────────
 
 
@@ -989,7 +1025,7 @@ def translate(
     if reply.startswith(UNAVAILABLE_PREFIX):
         return reply
     if reply.startswith("[engine error]"):
-        return _unavailable(reply[len("[engine error)" : "])])
+        return _unavailable(reply[len("[engine error]") :])
 
     cleaned = _clean_translation(reply)
     if not cleaned:
@@ -1014,7 +1050,14 @@ def _build_prompt(text: str, source: str, target: str) -> str:
     )
 
 
-_PROMPT_TEMPLATE = '{delimiter} Translate the following from {source} to {target}:\n\n{text}'
+_PROMPT_TEMPLATE = (
+    "You are a precise translation engine. Translate the {source} text below "
+    "into {target}.\n"
+    "Return ONLY the translation, no notes, no quotes, no transliteration.\n\n"
+    "--- BEGIN {delimiter} TEXT ---\n"
+    "{text}\n"
+    "--- END {delimiter} TEXT ---"
+)
 
 
 _QUIET_PREFIXES = frozenset({"```", "`", "\"", ">"})
@@ -1032,6 +1075,8 @@ _QUOTE_PAIRS = {
     "'": "'",
     "`": "`",
     ">": ">",
+    "\u201c": "\u201d",  # “ ”
+    "\u2018": "\u2019",  # ‘ ’
 }
 
 

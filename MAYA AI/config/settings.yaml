@@ -206,7 +206,8 @@ server:
   max_devices: 8
   wan:
     enabled: false
-    relay_url: ""
+    host: ""             # advertised in /health, e.g. a Tailscale IP; falls back to relay_url
+    relay_url: ""        # custom relay host:port (self-hosted path)
     cert_path: ""
     key_path: ""
     mode: lan            # lan | wan

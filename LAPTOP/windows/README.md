@@ -61,6 +61,30 @@ cd "LAPTOP\windows"
 .\.venv\Scripts\ruff.exe check app tests
 ```
 
+## Internet (WAN) remote — Tailscale
+
+LAN/hotspot/USB control works today. For control over the Internet, use
+**Tailscale** (recommended in `docs/WAN-REMOTE-DESIGN.md`). It gives the laptop a
+stable private IP and WireGuard encryption with no relay to run.
+
+1. Install Tailscale on the laptop and the phone; sign in to the same tailnet
+   (<https://tailscale.com>).
+2. Find the laptop's Tailscale IP (e.g. `100.x.y.z`).
+3. Set it in `MAYA AI\config\settings.yaml`:
+   ```yaml
+   server:
+     wan:
+       enabled: true
+       host: "100.x.y.z"     # advertised to the phone in /health
+   ```
+4. Start the phone server, then pair once over LAN. The phone can now use the
+   Tailscale IP as the laptop host; all existing endpoints work unchanged.
+
+The custom relay path (`relay_url` + TLS `cert_path`/`key_path`) is a skeleton:
+no relay is deployed and WAN TLS ACME is not implemented. Keep `mode: lan` and
+`enabled: false` unless you are running your own relay. `/health` reports
+`capabilities: [..., "wan"]` and `wan_host` when WAN is enabled.
+
 ## Requirements / Modes (from `docs\REQUIREMENTS.md`)
 
 Windows app must support (parity target):

@@ -1,6 +1,6 @@
 # Fedora — Maya AI
 
-Maya AI desktop app for Fedora (KDE Plasma). **Design / plan only — implementation not started.**
+Maya AI desktop app for Fedora (KDE Plasma). **Partial implementation — see Status.**
 
 - Target: Fedora 40+ (Workstation), KDE Plasma 6.x, Wayland primary, X11 fallback.
 - UI: PySide6 (Qt6) + QML (per `MAYA EXTENSION` design language — liquid glass).
@@ -52,29 +52,46 @@ Manage four connection types: Wi-Fi, Mobile Hotspot, Bluetooth, Internet.
 
 ## Status
 
-**Placeholder.** Setup files not yet present. Implementation pending.
+**Partial.** Remote-control adapters are implemented and structurally tested;
+the desktop app and full phone-server wiring are not.
 
-### Not yet implemented
-- App skeleton (`app/` package)
-- PC control module
-- Screen capture / input injection (Wayland + X11)
-- Phone server (FastAPI)
-- Tray / autostart (systemd)
-- Security (PIN, local store)
-- Connection Manager (shared module ready: `JARVIS\custom\tools\connection_manager.py`)
-- Tests
+### Implemented (19 Nov 2026)
+- `app/services/remote_service.py`: `ScreenAdapter` (maim → scrot fallback,
+  Pillow resize), `InputAdapter` (xdotool, xrandr screen size) and
+  `HybridAdapter` (shared `HybridController` — same surface as Windows).
+- `app/maya.service` + `app/install_service.sh`: systemd **user** service that
+  starts the shared monitor (`python -m custom.cli monitor start`).
+- `tests/test_remote_service.py`: 5 structural tests (pass on any OS;
+  hardware-specific paths fail closed off Linux).
 
-### To start implementation (when ready)
-1. Create `app/` package mirroring `LAPTOP\windows\app\` structure (common code in `JARVIS\custom`).
-2. Implement PC control first (reuse patterns from Windows).
-3. Add screen share + input injection.
-4. Wire phone server with shared API contract.
-5. Add security + connection manager.
-6. Tests + packaging.
+Run the adapter tests with the JARVIS venv:
+```bash
+PYTHONPATH="../JARVIS:." ../JARVIS/.venv/bin/python -m pytest tests -q
+```
+
+### Not yet implemented / needs Fedora hardware
+- Phone server (FastAPI `:8420`) wired to these adapters. The Windows
+  `server_service.py` is the reference, but several of its adapters are
+  Windows-specific (WMI, ctypes, PowerShell, WhatsApp deep links) and must be
+  ported with parity before a Fedora server can safely run. Adapter wiring into
+  a live server is therefore **not claimed as done**.
+- Real screen capture / xdotool input validation on Wayland + X11 (needs Fedora).
+- `maya.service` / `install_service.sh` execution on Fedora hardware.
+- UI (PySide6/QML), PC control page, security/PIN, Connection Manager.
+
+### To finish (when Fedora access is available)
+1. Port the platform-neutral Windows adapters (engine, voice, monitor, teacher)
+   into `app/services/`; write Linux equivalents for PC control.
+2. Add `app/services/server_service.py` mirroring Windows `build_services()`,
+   injecting `ScreenAdapter`, `InputAdapter`, `HybridAdapter`.
+3. Update `maya.service` / `install_service.sh` ExecStart to launch the server.
+4. Validate capture + input on Wayland and X11.
 
 ## Existing files (keep)
 
-- `app/` → (empty placeholder) chat app code (future)
+- `app/services/remote_service.py` — screen / input / hybrid adapters
+- `app/maya.service`, `app/install_service.sh` — systemd user service
+- `tests/test_remote_service.py` — adapter tests
 
 ## Notes
 

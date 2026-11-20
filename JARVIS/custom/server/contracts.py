@@ -192,6 +192,11 @@ class ServerSettings:
     wan_enabled: bool = False
     wan_relay_url: str = ""
     wan_cert_path: str = ""
+    wan_key_path: str = ""
+    wan_mode: str = "lan"
+    # Stable host advertised in /health (e.g. a Tailscale IP). Falls back to
+    # wan_relay_url when empty so older configs keep working.
+    wan_host: str = ""
 
 
 @dataclass

@@ -1,6 +1,6 @@
 # MAYA AI — WAN Remote Control Design
 
-> Status: design + skeleton (19 Nov 2026). Not deployed.
+> Status: design + skeleton; milestones 1–2 complete (19 Nov 2026). Relay/TLS not deployed.
 > Code: `JARVIS/custom/server/wan_relay.py`, `JARVIS/custom/server/tls.py`
 > Contract: `docs/API-CONTRACT.md` §18.
 
@@ -79,10 +79,16 @@ server:
 
 ## Milestones
 
-1. Add `wan_host` to `/health` + capabilities (code only).
-2. Tailscale install guide in `LAPTOP/windows/README.md`.
-3. Optional: custom relay deployment script (VPS) — deferred.
-4. Optional: ACME/Let's Encrypt cert renewal — deferred.
+1. ✅ Add `wan_host` to `/health` + capabilities (code only). The advertised
+   host comes from `server.wan.host`, falling back to `relay_url`.
+2. ✅ Tailscale install guide in `LAPTOP/windows/README.md` → "Internet (WAN)
+   remote — Tailscale".
+3. Optional: custom relay deployment script (VPS) — deferred (user action).
+4. Optional: ACME/Let's Encrypt cert renewal — deferred (user action).
+
+Config keys `host`, `relay_url`, `cert_path`, `key_path` and `mode` are now
+parsed into `ServerSettings`. The framed relay client buffers partial/multiple
+frames correctly; the relay server and WAN TLS remain skeletons by design.
 
 ## Honest limits
 

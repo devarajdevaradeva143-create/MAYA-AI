@@ -24,6 +24,7 @@ import com.devaraj.maya.data.remote.RemoteStartResponse
 import com.devaraj.maya.data.remote.RemoteStatusDto
 import com.devaraj.maya.data.remote.apiCall
 import com.devaraj.maya.domain.model.OperatingMode
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,6 +33,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
@@ -232,8 +234,12 @@ class RemoteViewModel(
                     onSuccess = { body ->
                         errors = 0
                         try {
-                            val bytes = body.bytes()
-                            val bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                            val bmp = withContext(Dispatchers.IO) {
+                                body.use { b ->
+                                    val bytes = b.bytes()
+                                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                                }
+                            }
                             _state.update { it.copy(screenBitmap = bmp, screenError = null, screenLoading = false, sessionExpiresIn = it.sessionExpiresIn) }
                         } catch (io: IOException) {
                             _state.update { it.copy(screenError = io.message) }
@@ -363,8 +369,10 @@ class RemoteViewModel(
             res.fold(
                 onSuccess = { body ->
                     try {
-                        context.contentResolver.openOutputStream(destination)?.use { out ->
-                            body.byteStream().copyTo(out)
+                        withContext(Dispatchers.IO) {
+                            context.contentResolver.openOutputStream(destination)?.use { out ->
+                                body.byteStream().use { input -> input.copyTo(out) }
+                            }
                         }
                         _state.update { it.copy(fileBusy = false, fileMessage = "Downloaded") }
                     } catch (io: IOException) {

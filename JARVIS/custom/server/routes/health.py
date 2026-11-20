@@ -59,5 +59,9 @@ def health(request: Request) -> HealthResponse:
         capabilities=capabilities_for(services),
         paired_devices=paired,
         uptime_s=max(0, int(time.time() - services.started_at)),
-        wan_host=services.settings.wan_relay_url or None,
+        wan_host=(
+            services.settings.wan_host
+            or services.settings.wan_relay_url
+            or None
+        ),
     )

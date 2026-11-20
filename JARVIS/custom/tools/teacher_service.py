@@ -180,6 +180,7 @@ class TeacherService:
             self._db_path = _resolve_db_path(None, None, None, None)
         else:
             self._db_path = Path(resolved).expanduser()
+        self._ensure_schema()
 
     # ── db helpers ────────────────────────────────────────────────────
     def _connect(self) -> sqlite3.Connection:

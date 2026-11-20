@@ -43,7 +43,14 @@ import android.widget.Toast
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.devaraj.maya.R
 import com.devaraj.maya.domain.model.AiSource
@@ -219,7 +226,7 @@ fun ChatScreen(
 private fun MessageBubble(
     message: Message,
     onRetry: () -> Unit,
-    onSendToWhatsApp: (String) -> Unit,
+    onSendToWhatsApp: (String) -> String,
 ) {
     val isUser = message.role == MessageRole.USER
     val isAssistant = message.role == MessageRole.MAYA || message.role == MessageRole.ASSISTANT
@@ -243,12 +250,13 @@ private fun MessageBubble(
             ),
             modifier = Modifier.fillMaxWidth(0.85f),
         ) {
-            val text = buildString {
+            val baseText = buildString {
                 append(message.content)
                 if (message.status == MessageStatus.STREAMING) append("▌")
             }
+            val rendered = parseSimpleMarkdown(baseText.ifBlank { "…" })
             Text(
-                text = text.ifBlank { "…" },
+                text = rendered,
                 style = MaterialTheme.typography.bodyLarge,
                 color = if (isUser) {
                     MaterialTheme.colorScheme.onPrimary
@@ -354,7 +362,14 @@ private fun Composer(
     ) {
         OutlinedTextField(
             value = input,
-            onValueChange = onInputChange,
+            onValueChange = { newValue ->
+                if (newValue.endsWith("\n") && newValue.trim().isNotEmpty() && canSend && !streaming) {
+                    onSend()
+                    onInputChange("")
+                } else {
+                    onInputChange(newValue)
+                }
+            },
             placeholder = { Text(text = stringResource(R.string.chat_composer_hint)) },
             modifier = Modifier.weight(1f),
             maxLines = 4,
@@ -393,4 +408,25 @@ private fun Composer(
             }
         }
     }
+}
+
+
+// ---- simple markdown (bold / italic / inline code) ----
+private val MD_REGEX = Regex("""\*\*(.+?)\*\*|\*(.+?)\*|`([^`]+)`""")
+
+fun parseSimpleMarkdown(input: String): AnnotatedString = buildAnnotatedString {
+    var last = 0
+    for (m in MD_REGEX.findAll(input)) {
+        if (m.range.first > last) {
+            append(input.substring(last, m.range.first))
+        }
+        val (bold, italic, code) = m.destructured
+        when {
+            bold.isNotEmpty() -> { pushStyle(SpanStyle(fontWeight = FontWeight.Bold)); append(bold); pop() }
+            italic.isNotEmpty() -> { pushStyle(SpanStyle(fontStyle = FontStyle.Italic)); append(italic); pop() }
+            code.isNotEmpty() -> { pushStyle(SpanStyle(fontFamily = FontFamily.Monospace)); append(code); pop() }
+        }
+        last = m.range.last + 1
+    }
+    if (last < input.length) append(input.substring(last))
 }

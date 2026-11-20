@@ -13,6 +13,31 @@ import sys
 from typing import Any
 
 from custom.server.contracts import ScreenFrame
+from custom.tools.hybrid_controller import Controller, HybridController
+
+
+class HybridAdapter:
+    """HYBRID mode control bus (platform-neutral shared controller).
+
+    Mirrors the Windows adapter so the phone API can expose the same
+    status / takeover / release / list_tasks surface on Fedora. The actual
+    screen and input injection stay in the OS-specific adapters below.
+    """
+
+    def __init__(self, controller: HybridController | None = None) -> None:
+        self.controller = controller or HybridController()
+
+    def status(self) -> Any:
+        return self.controller.status()
+
+    def list_tasks(self) -> list[Any]:
+        return self.controller.list_tasks()
+
+    def takeover(self) -> bool:
+        return self.controller.takeover(Controller.USER)
+
+    def release(self) -> bool:
+        return self.controller.release(Controller.USER)
 
 
 class ScreenAdapter:
@@ -203,4 +228,4 @@ class InputAdapter:
         return applied
 
 
-__all__ = ["InputAdapter", "ScreenAdapter"]
+__all__ = ["HybridAdapter", "InputAdapter", "ScreenAdapter"]

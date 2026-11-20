@@ -99,6 +99,9 @@ def server_settings(raw: dict[str, Any] | None = None) -> ServerSettings:
         wan_enabled=_as_bool(wan_cfg.get("enabled", False), False),
         wan_relay_url=str(wan_cfg.get("relay_url", "") or ""),
         wan_cert_path=str(wan_cfg.get("cert_path", "") or ""),
+        wan_key_path=str(wan_cfg.get("key_path", "") or ""),
+        wan_mode=str(wan_cfg.get("mode", "lan") or "lan"),
+        wan_host=str(wan_cfg.get("host", "") or ""),
     )
 
 
@@ -207,6 +210,8 @@ class ServerService:
         self._server = None
         self._thread: threading.Thread | None = None
         self._started = threading.Event()
+        self._zeroconf = None
+        self._nsd_info = None
 
     # -- lifecycle ----------------------------------------------------
 
@@ -245,6 +250,7 @@ class ServerService:
             raise RuntimeError(self.last_error)
 
     def stop(self, timeout: float = 5.0) -> None:
+        self._unregister_nsd()
         try:
             self.services.wake.stop()
         except Exception:  # noqa: BLE001 - shutdown must continue
@@ -289,6 +295,12 @@ class ServerService:
                 if self.host not in {"0.0.0.0", "::", ""}:
                     self.services.host = self.host
                 logger.info("Phone server listening on %s:%s", self.host, self.bound_port)
+                try:
+                    await asyncio.get_event_loop().run_in_executor(
+                        None, self._register_nsd, (self.bound_port or self.port)
+                    )
+                except Exception:  # noqa: BLE001
+                    logger.warning("NSD registration scheduling failed", exc_info=True)
             self._started.set()
             await task
 
@@ -314,6 +326,54 @@ class ServerService:
         except (AttributeError, IndexError, OSError):
             pass
         return None
+
+    def _register_nsd(self, port: int) -> None:
+        try:
+            from zeroconf import ServiceInfo, Zeroconf
+        except Exception:  # noqa: BLE001 - optional dependency
+            logger.info("zeroconf not installed; skipping NSD advertise")
+            return
+        try:
+            ip = self.services.host or lan_ip()
+            if not ip:
+                logger.info("No LAN IP; skipping NSD advertise")
+                return
+            name_host = (self.services.laptop_name or socket.gethostname() or "Maya-Laptop").replace(" ", "-")
+            service_name = f"{name_host}._maya._tcp.local."
+            info = ServiceInfo(
+                "_maya._tcp.local.",
+                service_name,
+                port=int(port),
+                parsed_addresses=[ip],
+                server=f"{socket.gethostname()}.local.",
+                properties={"version": "1"},
+            )
+            zc = Zeroconf()
+            zc.register_service(info, allow_name_change=True)
+            self._zeroconf = zc
+            self._nsd_info = info
+            logger.info("NSD advertising %s on port %s", service_name, port)
+        except Exception as exc:  # noqa: BLE001 - advertise is best effort
+            logger.warning("NSD advertise failed: %r", exc, exc_info=True)
+            self._zeroconf = None
+            self._nsd_info = None
+
+    def _unregister_nsd(self) -> None:
+        zc = self._zeroconf
+        info = self._nsd_info
+        self._zeroconf = None
+        self._nsd_info = None
+        if zc is None:
+            return
+        try:
+            if info is not None:
+                zc.unregister_service(info)
+        except Exception:  # noqa: BLE001
+            logger.debug("NSD unregister failed", exc_info=True)
+        try:
+            zc.close()
+        except Exception:  # noqa: BLE001
+            logger.debug("Zeroconf close failed", exc_info=True)
 
 
 def _print_pairing(service: ServerService) -> None:

@@ -50,6 +50,31 @@ def test_server_settings_defaults_when_missing() -> None:
     assert settings.port == 8420
     assert settings.lan_only is True
     assert settings.allowed_roots == []
+    assert settings.wan_host == ""
+    assert settings.wan_mode == "lan"
+
+
+def test_server_settings_parses_wan_keys() -> None:
+    raw = {
+        "server": {
+            "wan": {
+                "enabled": True,
+                "host": "100.64.0.5",
+                "relay_url": "relay.example.com:9443",
+                "cert_path": "/etc/maya/maya.crt",
+                "key_path": "/etc/maya/maya.key",
+                "mode": "wan",
+            }
+        }
+    }
+    settings = server_settings(raw)
+
+    assert settings.wan_enabled is True
+    assert settings.wan_host == "100.64.0.5"
+    assert settings.wan_relay_url == "relay.example.com:9443"
+    assert settings.wan_cert_path == "/etc/maya/maya.crt"
+    assert settings.wan_key_path == "/etc/maya/maya.key"
+    assert settings.wan_mode == "wan"
 
 
 # -- engine adapter ---------------------------------------------------

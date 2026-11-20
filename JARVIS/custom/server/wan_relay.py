@@ -51,10 +51,15 @@ class RelayClient:
     def __init__(self) -> None:
         self._sock: socket.socket | None = None
         self._lock = threading.Lock()
+        # Bytes read from the socket but not yet consumed by receive(). A
+        # single recv() can contain several frames (or a partial frame), so the
+        # remainder must survive across calls instead of being discarded.
+        self._buffer = b""
 
     def connect(self, relay_url: str, token: str) -> bool:
         """Connect to ``relay_url`` (``host:port``) and authenticate with ``token``."""
         host, port = _split_host_port(relay_url)
+        self._buffer = b""
         try:
             self._sock = socket.create_connection((host, port), timeout=10)
         except OSError:
@@ -79,18 +84,17 @@ class RelayClient:
     def receive(self) -> bytes | None:
         if self._sock is None:
             return None
-        buffer = b""
         try:
             while True:
-                frame = decode_frame(buffer)
+                frame = decode_frame(self._buffer)
                 if frame is not None:
-                    payload, _ = frame
+                    payload, self._buffer = frame
                     return payload
                 chunk = self._sock.recv(65536)
                 if not chunk:
                     return None
-                buffer += chunk
-        except OSError:
+                self._buffer += chunk
+        except (OSError, ValueError):
             return None
 
     def disconnect(self) -> None:
@@ -100,6 +104,7 @@ class RelayClient:
             except OSError:
                 pass
             self._sock = None
+        self._buffer = b""
 
     def is_connected(self) -> bool:
         return self._sock is not None
