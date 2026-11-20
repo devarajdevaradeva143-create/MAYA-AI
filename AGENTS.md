@@ -8,7 +8,7 @@
 
 ## 1. Project enna?
 
-**Maya AI** — local-first personal AI assistant for Windows + Fedora.
+**Maya AI** — local-first personal AI assistant for Windows.
 
 - Laptop: HP OmniBook 5 (Ryzen AI 5 340)
 - Model: **Qwen 3B**
@@ -48,7 +48,7 @@ MAYA AI PROJECT\
 | `docs\` | Notes / guides | Secrets / personal data |
 | `DEVARAJ\` | User details | Cloud upload ❌ |
 
-### B. Common Design (Windows + Fedora)
+### B. Common Design (Windows)
 
 ```
 MAYA AI PROJECT\MAYA AI\
@@ -106,16 +106,12 @@ JARVIS\
 
 ```
 MAYA AI PROJECT\LAPTOP\
-├─ windows\app\      ← Windows app code
-└─ fedora\app\       ← Fedora app code
+└─ windows\app\      ← Windows app code
 ```
 
 | Folder | Enna pannanum |
 |---|---|
 | `windows\app\` | Windows-only code (Task Scheduler, tray) |
-| `fedora\app\` | Fedora-only code (systemd) |
-
-Common code rendu-layum share aaganum — OS-specific mattum inga.
 
 ---
 
@@ -161,11 +157,7 @@ Common code rendu-layum share aaganum — OS-specific mattum inga.
 ## 7. Update procedure
 
 ```powershell
-# Windows
 powershell -ExecutionPolicy Bypass -File JARVIS\scripts\update_openjarvis.ps1
-
-# Fedora
-bash JARVIS/scripts/update_openjarvis.sh
 ```
 
 Details: `JARVIS\UPDATE.md`
