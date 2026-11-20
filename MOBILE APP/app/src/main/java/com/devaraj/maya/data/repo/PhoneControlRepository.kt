@@ -1,5 +1,7 @@
 package com.devaraj.maya.data.repo
 
+import androidx.core.net.toUri
+
 import android.Manifest
 import android.content.ContentResolver
 import android.content.Context
@@ -259,7 +261,7 @@ class PhoneControlRepository(
         if (target.isBlank() || message.isBlank()) return false
         val pkg = whatsAppPackage() ?: return false
         return try {
-            val uri = android.net.Uri.parse("https://wa.me/$target?text=${android.net.Uri.encode(message)}")
+            val uri = "https://wa.me/$target?text=${android.net.Uri.encode(message)}".toUri()
             val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, uri).apply {
                 setPackage(pkg)
                 addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)

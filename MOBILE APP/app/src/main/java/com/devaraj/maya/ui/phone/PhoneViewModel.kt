@@ -1,5 +1,7 @@
 package com.devaraj.maya.ui.phone
 
+import androidx.core.net.toUri
+
 import android.Manifest
 import android.app.Application
 import android.net.Uri
@@ -337,7 +339,7 @@ class PhoneViewModel(
             settingsStore.removePickedFolder(uri)
             runCatching {
                 app.contentResolver.releasePersistableUriPermission(
-                    Uri.parse(uri),
+                    uri.toUri(),
                     android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or
                         android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
                 )

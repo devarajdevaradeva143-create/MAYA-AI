@@ -1,5 +1,7 @@
 package com.devaraj.maya.ui.phone
 
+import androidx.core.net.toUri
+
 import android.Manifest
 import android.content.Context
 import android.content.Intent
@@ -610,7 +612,7 @@ private fun FilesSection(
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                     Row(modifier = Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = runCatching { Uri.parse(uri).lastPathSegment ?: uri }.getOrDefault(uri),
+                            text = runCatching { uri.toUri().lastPathSegment ?: uri }.getOrDefault(uri),
                             style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.weight(1f),
                         )

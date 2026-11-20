@@ -1,5 +1,7 @@
 package com.devaraj.maya.ui.chat
 
+import androidx.core.net.toUri
+
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -283,7 +285,7 @@ private fun MessageBubble(
                 TextButton(onClick = {
                     val url = onSendToWhatsApp(message.content)
                     try {
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                        val intent = Intent(Intent.ACTION_VIEW, url.toUri())
                         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                         context.startActivity(intent)
                     } catch (e: Exception) {
@@ -415,10 +417,17 @@ private fun Composer(
 private val MD_REGEX = Regex("""\*\*(.+?)\*\*|\*(.+?)\*|`([^`]+)`""")
 
 fun parseSimpleMarkdown(input: String): AnnotatedString = buildAnnotatedString {
+    // Convert markdown bullets to bullet char.
+    val normalized = input.lines().joinToString("\n") { line ->
+        val trimmed = line.trimStart()
+        if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
+            line.replaceFirst(Regex("^\\s*[-*] "), "• ")
+        } else line
+    }
     var last = 0
-    for (m in MD_REGEX.findAll(input)) {
+    for (m in MD_REGEX.findAll(normalized)) {
         if (m.range.first > last) {
-            append(input.substring(last, m.range.first))
+            append(normalized.substring(last, m.range.first))
         }
         val (bold, italic, code) = m.destructured
         when {
@@ -428,5 +437,5 @@ fun parseSimpleMarkdown(input: String): AnnotatedString = buildAnnotatedString {
         }
         last = m.range.last + 1
     }
-    if (last < input.length) append(input.substring(last))
+    if (last < normalized.length) append(normalized.substring(last))
 }
