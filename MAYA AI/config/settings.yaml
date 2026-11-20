@@ -62,7 +62,7 @@ memory:
 
 # knowledge — local RAG (offline). BM25 always works; embeddings are optional.
 knowledge:
-  embedding_model: minishlab/potion-base-32M   # cached in MAYA AI/Model/hf
+  embedding_model: minishlab/potion-multilingual-128M   # cached in MAYA AI/Model/hf
   # Tamil-heavy queries? swap for a multilingual model (~512 MB download):
   # embedding_model: minishlab/potion-multilingual-128M
 
@@ -222,3 +222,7 @@ ui:
   close_to_tray: true
   start_minimized: false
   confirm_destructive: true
+bluetooth_remote:
+  enabled: true
+phone_remote:
+  enabled: true

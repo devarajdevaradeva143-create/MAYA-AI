@@ -188,5 +188,31 @@ def chat(system, no_log) -> None:
             cloud.log_exchange(prompt, reply)
 
 
+@main.command()
+@click.option("--message", default="Hello, Maya! Just testing the connection.",
+              help="Test message to send.")
+def test(message: str) -> None:
+    """Send a short test prompt to Gemini to verify the API key works."""
+    key = cloud.api_key()
+    if not key:
+        raise click.ClickException(
+            f"No {cloud.ENV_KEY} configured. Run: maya-cloud set-key"
+        )
+    _emit(f"Sending test message to {cloud.model_name()}...")
+    try:
+        reply = cloud.ask(message)
+        _emit("")
+        _emit("Gemini reply:")
+        _emit(reply)
+        saved = cloud.log_exchange(message, reply)
+        if saved:
+            _emit("\n[logged to " + str(saved) + "]")
+        _emit("\nCloud connection is working.")
+    except cloud.CloudError as exc:
+        raise click.ClickException(str(exc))
+
+
+
+
 if __name__ == "__main__":
     main()

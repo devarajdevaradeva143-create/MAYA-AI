@@ -125,7 +125,7 @@ def run_gui(argv: Sequence[str] | None = None, start_hidden: bool = False, tray_
     from app.ui.lock_screen import LockScreen
 
     security = SecurityService()
-    if security.session_locked():
+    if security.pin_is_set():
         lock = LockScreen(security)
         if lock.exec() != QDialog.DialogCode.Accepted:
             return 0

@@ -59,6 +59,58 @@ _FALLBACK: dict[tuple[str, str], dict[str, Any]] = {
         "answer": None,
         "explanation": "Try: 'Hi, nice to meet you — I'm glad to join the team.'",
     },
+    # Intermediate
+    ("Vocabulary", "Intermediate"): {
+        "prompt": "Choose the best synonym for 'meticulous':\nA) Careless  B) Very careful  C) Fast  D) Loud",
+        "answer": "b",
+        "explanation": "'Meticulous' means showing great attention to detail; very careful and precise.",
+    },
+    ("Grammar", "Intermediate"): {
+        "prompt": "Complete with the correct conditional:\n'If I ____ (know) the answer, I would tell you.'",
+        "answer": "knew",
+        "explanation": "Second conditional: if + past simple, would + base verb. For imaginary present situations.",
+    },
+    ("Pronunciation", "Intermediate"): {
+        "prompt": "Word: entrepreneur  /\u00cau02d0ntrÉ™prÉ™nÉª/\nHow many syllables? Which syllable is stressed?",
+        "answer": None,
+        "explanation": "Four syllables: en-tre-pre-neur. Stress on the last syllable: -neur.",
+    },
+    ("Idioms", "Intermediate"): {
+        "prompt": "What does 'bite the bullet' mean?",
+        "answer": "to accept something difficult or unpleasant",
+        "explanation": "'Bite the bullet' = to endure a painful or difficult situation bravely.",
+    },
+    ("Conversation", "Intermediate"): {
+        "prompt": "You are late to a meeting. Apologize and explain in two sentences.",
+        "answer": None,
+        "explanation": "Try: 'I'm sorry I'm late. The traffic was terrible this morning.'",
+    },
+    # Advanced
+    ("Vocabulary", "Advanced"): {
+        "prompt": "Choose the word closest in meaning to 'ephemeral':\nA) Eternal  B) Short-lived  C) Heavy  D) Clear",
+        "answer": "b",
+        "explanation": "'Ephemeral' means lasting for a very short time.",
+    },
+    ("Grammar", "Advanced"): {
+        "prompt": "Rewrite using inversion (no 'if'):\n'Had I known, I would have helped.'",
+        "answer": "had i known, i would have helped",
+        "explanation": "In formal English, drop 'if' and invert subject + auxiliary: 'Had I known...'",
+    },
+    ("Pronunciation", "Advanced"): {
+        "prompt": "Sentence: 'I didn't say he stole the money.'\nWhich word, when stressed, changes the meaning most?",
+        "answer": None,
+        "explanation": "Stress changes meaning: stress 'didn't' = someone else said it; stress 'say' = you implied it another way.",
+    },
+    ("Idioms", "Advanced"): {
+        "prompt": "What does 'elephant in the room' mean?",
+        "answer": "an obvious problem everyone avoids discussing",
+        "explanation": "'Elephant in the room' = a major issue that is obvious but ignored.",
+    },
+    ("Conversation", "Advanced"): {
+        "prompt": "Negotiate a deadline extension with your manager in three sentences.",
+        "answer": None,
+        "explanation": "Try: 'I need more time to finish the report. Could we extend the deadline to Friday? I want to ensure the quality is high.'",
+    },
 }
 
 
@@ -589,3 +641,37 @@ class TeacherService:
     # ── Back-compat alias used by windows adapter / UI ────────────────
     def progress(self) -> dict[str, Any]:
         return self.get_progress(None)
+
+    def list_lessons(self) -> dict[str, list[dict[str, Any]]]:
+        """Return all known lessons grouped by topic, including fallback and
+        AI-generated lessons stored in the database."""
+        grouped: dict[str, list[dict[str, Any]]] = {}
+        for (topic, level), data in _FALLBACK.items():
+            grouped.setdefault(topic, []).append({
+                "topic": topic,
+                "level": level,
+                "type": data.get("type", "mixed"),
+                "prompt": data.get("prompt", ""),
+                "answer": data.get("answer"),
+                "explanation": data.get("explanation", ""),
+                "source": "fallback",
+            })
+        try:
+            with self._connect() as conn:
+                rows = conn.execute(
+                    "SELECT id, topic, level, lesson_type, prompt, answer, explanation, source FROM lessons WHERE source='ai'"
+                ).fetchall()
+                for r in rows:
+                    grouped.setdefault(r["topic"], []).append({
+                        "id": r["id"],
+                        "topic": r["topic"],
+                        "level": r["level"],
+                        "type": r["lesson_type"],
+                        "prompt": r["prompt"],
+                        "answer": r["answer"],
+                        "explanation": r["explanation"],
+                        "source": r["source"],
+                    })
+        except Exception:
+            pass
+        return grouped
