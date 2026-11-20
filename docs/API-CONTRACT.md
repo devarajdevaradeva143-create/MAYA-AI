@@ -1007,3 +1007,221 @@ laptop advertises a stable address and TLS is mandatory.
 
 > Implementation status: `wan_relay.py` + `tls.py` are compilable skeletons.
 > No relay is deployed and no certs are provisioned.
+
+---
+
+## 19. Bluetooth PAN remote (design)
+
+Bluetooth Personal Area Network (PAN) enables remote control over Bluetooth without WiFi.
+
+### Architecture
+
+```
+Phone (PANU) ←→ Laptop (NAP/GN) via Bluetooth PAN
+```
+
+- Phone acts as PANU (PAN User) — provides network via Bluetooth
+- Laptop acts as NAP (Network Access Point) — connects to phone PAN
+- IP assignment: DHCP or link-local (169.254.x.x)
+- Fallback: RFCOMM (Serial Port Profile) for legacy devices
+
+### Connection Flow
+
+1. **Pairing:** Phone + laptop pair via Bluetooth settings (OS-level)
+2. **PAN activation:** Phone enables Bluetooth tethering / PAN server
+3. **Laptop connects:** `BluetoothAdapter` discovers phone → connects to PAN
+4. **IP assignment:** Phone DHCP server assigns IP to laptop (or static link-local)
+5. **API access:** Laptop uses phone IP (e.g., 192.168.44.1) for API calls
+
+### Endpoints (same as LAN, different transport)
+
+All existing endpoints work over Bluetooth PAN:
+- `GET /api/v1/health` → health check
+- `POST /api/v1/pc/command` → laptop control
+- `WS /api/v1/ws/events` → monitor events
+- `POST /phone/remote/start` → phone remote (laptop controls phone)
+
+### Config (settings.yaml)
+
+```yaml
+bluetooth:
+  enabled: false
+  mode: pan          # pan | rfcomm
+  pan_role: nap      # nap (laptop) | panu (phone)
+  auto_connect: false
+```
+
+### Security
+
+- OS-level Bluetooth pairing required (PIN/confirmation)
+- PAN traffic encrypted by Bluetooth link layer
+- Same API token auth required after connection
+
+### Rate limits (same as LAN)
+
+| Scope | Limit |
+|---|---|
+| `/pc/command` | 30 / min |
+| `/pc/screen` | 120 / min |
+| `/pc/input` | 600 / min |
+
+---
+
+## 20. Internet/WAN Remote Control (full spec)
+
+Complete internet remote via self-hosted relay + TLS.
+
+### Architecture
+
+```
+Phone ←→ Relay Server ←→ Laptop
+   WS/TLS        WS/TLS
+```
+
+### Components
+
+| Component | Role | Protocol |
+|---|---|---|
+| **Phone** | Client | WebSocket Secure (WSS) |
+| **Relay** | Broker | WSS + TLS termination |
+| **Laptop** | Server | WSS + TLS |
+
+### Relay Server Spec
+
+- **Port:** 443 (HTTPS) or custom (e.g., 8443)
+- **Protocol:** WebSocket Secure (WSS) with TLS 1.3
+- **Auth:** Token-based (reuse pairing token)
+- **Routing:** Phone device_id → Laptop device_id mapping
+- **Frame format:** JSON messages + binary frames (for screen)
+- **Rate limit:** Per-device, per-IP
+
+### Phone → Relay Connection
+
+```
+WSS: wss://relay.example.com:443/wan/phone?token=<pairing_token>
+```
+
+**Messages:**
+```json
+// Phone → Relay (register)
+{ "type": "register", "device_id": "...", "capabilities": ["phone_remote"] }
+
+// Relay → Phone (ack)
+{ "type": "registered", "wan_id": "wan_..." }
+
+// Phone → Relay (screen frame)
+{ "type": "screen", "data": "<base64_jpeg>", "seq": 123 }
+
+// Relay → Laptop (forward)
+{ "type": "screen", "data": "<base64_jpeg>", "seq": 123, "from": "phone_..." }
+
+// Laptop → Relay (input)
+{ "type": "input", "events": [...], "to": "phone_..." }
+```
+
+### Laptop → Relay Connection
+
+```
+WSS: wss://relay.example.com:443/wan/laptop?token=<pairing_token>
+```
+
+**Messages:** Same framing, opposite direction.
+
+### TLS Certificates
+
+- **Relay:** Cert + key (self-signed or CA-signed)
+- **Phone:** Embeds relay CA cert for pinning
+- **Laptop:** Uses same cert/key as relay for WSS server
+- **Cert pinning:** Phone validates relay cert SHA-256 fingerprint
+
+### Config (settings.yaml)
+
+```yaml
+server:
+  wan:
+    enabled: false
+    relay_url: "wss://relay.example.com:443"
+    cert_path: "MAYA AI/security/certs/wan_cert.pem"
+    key_path: "MAYA AI/security/certs/wan_key.pem"
+    mode: "wan"          # lan | wan
+    cert_pin_sha256: "abc123..."  # phone-side pinning
+```
+
+### Pairing Token Reuse
+
+- Same `maya_<43 chars>` token used for LAN + WAN
+- Token scope includes `wan` capability
+- Relay validates token with laptop's token store (or shared secret)
+
+### Handoff (LAN ↔ WAN)
+
+1. Phone detects WiFi disconnect → switches to WAN mode
+2. Opens WSS to relay → registers with token
+3. Laptop accepts relay connection → resumes session
+4. When WiFi returns → closes WAN → reconnects LAN
+5. Session state preserved (screen stream, input queue)
+
+### Security
+
+- TLS 1.3 mandatory (no cleartext)
+- Cert pinning on phone
+- Token auth on every frame
+- Relay cannot decrypt control payloads (end-to-end)
+- Rate limiting per device
+
+### Deployment
+
+- **Self-hosted relay:** Docker container on VPS/home server
+- **Tailscale alternative:** Use Tailscale IP as `wan_host` (no relay needed)
+- **Cert management:** `mkcert` for local CA, or Let's Encrypt for public relay
+
+---
+
+## 21. Implementation split (updated)
+
+### Laptop (Python)
+
+```
+JARVIS\custom\server\
+├─ __init__.py
+├─ app.py
+├─ contracts.py
+├─ models.py
+├─ auth.py
+├─ pair.py
+├─ confirm.py
+├─ lan.py
+├─ bluetooth.py          # PAN/RFCOMM server
+├─ wan_relay.py          # WAN relay client/server
+├─ tls.py                # Cert management
+├─ routes\
+│  ├─ __init__.py
+│  ├─ chat.py
+│  ├─ events.py
+│  ├─ health.py
+│  ├─ hybrid.py
+│  ├─ pair.py
+│  ├─ pc.py
+│  ├─ remote.py
+│  ├─ voice.py
+│  ├─ wake.py
+│  ├─ wan.py             # WAN endpoints
+│  └─ bluetooth.py       # Bluetooth endpoints
+```
+
+### Phone (Android)
+
+```
+MOBILE APP\app\src\main\java\com\devaraj\maya\
+├─ data\remote\
+│  ├─ WanRemoteClient.kt      # WSS client + relay
+│  ├─ BluetoothRemoteClient.kt # PAN/RFCOMM client
+│  └─ ConnectionManager.kt    # LAN/USB/BT/WAN switch
+├─ service\
+│  ├─ WanRemoteService.kt     # Background WSS connection
+│  ├─ BluetoothRemoteService.kt # PAN server
+│  └─ RelayCertificatePinner.kt # Cert pinning
+└─ ui\settings\
+   ├─ WanRemoteSettings.kt
+   └─ BluetoothRemoteSettings.kt
+```

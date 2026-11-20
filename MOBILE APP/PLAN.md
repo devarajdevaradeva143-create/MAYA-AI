@@ -1800,13 +1800,76 @@ Tasks:
 - USB: `adb reverse` guide + 127.0.0.1 mode.
 - BT: PAN mode guide + discovery.
 - Connection mode switch.
+- **Bluetooth PAN implementation:**
+  - `BluetoothAdapter` + `BluetoothManager` for PAN profile
+  - `BluetoothServerSocket` (laptop) / `BluetoothSocket` (phone) for RFCOMM fallback
+  - PAN tethering: phone as PANU, laptop as NAP/GN
+  - Auto-discovery via `BluetoothAdapter.startDiscovery()`
+  - Pairing flow: phone shows PIN → laptop confirms
+  - Connection manager: WiFi / USB / BT PAN mode switch in Settings
 
 **DoD:**
 - USB chat works with cable.
 - BT PAN chat works after manual setup.
 - Wrong mode → clear error.
 
-### Phase 12 — Settings complete + test + release
+### Phase 11B — Bluetooth Remote Control (Phone ↔ Laptop)
+
+Tasks:
+- **Phone side:**
+  - `BluetoothRemoteService` — PAN server (NAP) + RFCOMM fallback
+  - `BluetoothServerSocket` on laptop for incoming PAN connections
+  - Phone discovers laptop via `BluetoothAdapter.getBondedDevices()`
+  - Pairing confirmation dialog on both devices
+  - PAN IP assignment (169.254.x.x link-local or DHCP)
+  - Connection state: Disconnected / Connecting / Connected / Error
+- **Laptop side:**
+  - Bluetooth PAN client (connect to phone PAN)
+  - RFCOMM client for legacy support
+  - Settings: "Bluetooth" connection mode toggle
+  - UI: Bluetooth device list + pair/connect buttons
+  - Auto-reconnect on Bluetooth state change
+
+**DoD:**
+- Phone PAN + laptop PAN client connects
+- Chat + remote control works over Bluetooth PAN
+- RFCOMM fallback for older devices
+- Auto-reconnect on Bluetooth on/off
+
+### Phase 14 — Internet/WAN Remote Control
+
+Tasks:
+- **Relay Server (self-hosted):**
+  - WebSocket relay: `wss://relay-host:port`
+  - TLS termination (cert + key)
+  - Connection routing: phone → relay → laptop
+  - Token-based auth (reuse pairing tokens)
+  - Rate limiting + connection limits
+  - Health endpoint for monitoring
+- **Phone side:**
+  - `WanRemoteClient` — connects to relay via WebSocket
+  - TLS cert pinning (embedded CA)
+  - Auto-reconnect with exponential backoff
+  - Settings: "Internet remote" toggle + relay URL input
+  - Connection state indicator (LAN / WAN / Offline)
+- **Laptop side:**
+  - `WanRemoteServer` — accepts relay connections
+  - WebSocket server with TLS (same cert as relay)
+  - Settings: "Allow internet remote" toggle
+  - UI: WAN connection status + relay URL config
+- **Integration:**
+  - Pairing token works for both LAN + WAN
+  - Seamless handoff: LAN → WAN when WiFi lost
+  - Phone Remote + Laptop Control both work over WAN
+
+**DoD:**
+- Relay server deployed + TLS working
+- Phone connects to relay → laptop accepts
+- Chat + Phone Remote + Laptop Control work over internet
+- Auto-reconnect on network change
+- Cert pinning prevents MITM
+
+---
 
 Tasks:
 - All settings screens wired.

@@ -26,8 +26,10 @@ from PySide6.QtWidgets import (
 )
 
 from app.services import autostart_service
+from app.services.bluetooth_remote_client import reset_bluetooth_client
 from app.services.phone_remote_client import reset_phone_remote_client
 from app.services.server_service import shared_server_service
+from app.services.wan_remote_client import reset_wan_client
 from app.settings_repository import SettingsError, SettingsRepository
 from app.ui.theme import MODES, ThemeManager
 from app.ui.workers import ServerStartWorker
@@ -83,6 +85,8 @@ class SettingsPage(QScrollArea):
         self._build_appearance()
         self._build_startup()
         self._build_phone_remote()
+        self._build_bluetooth_remote()
+        self._build_wan_remote()
         self._build_server()
         self._build_footer()
 
@@ -220,11 +224,131 @@ class SettingsPage(QScrollArea):
         else:
             self._phone_remote_status.setText("Status: Disabled")
 
+    # -- bluetooth remote ---------------------------------------------
+    def _build_bluetooth_remote(self) -> None:
+        card, layout = _card(
+            "Bluetooth Remote",
+            "Control paired phone via Bluetooth PAN (no WiFi needed). "
+            "Requires phone Bluetooth tethering + PAN profile.",
+        )
+
+        self._bluetooth_remote_enable = QCheckBox("Enable Bluetooth remote control")
+        self._bluetooth_remote_enable.setChecked(bool(self._repository.get("bluetooth_remote.enabled", False)))
+        self._bluetooth_remote_enable.toggled.connect(self._on_bluetooth_remote_toggled)
+        layout.addWidget(self._bluetooth_remote_enable)
+
+        self._bluetooth_remote_status = QLabel("Status: Disabled")
+        self._bluetooth_remote_status.setObjectName("emptyHint")
+        layout.addWidget(self._bluetooth_remote_status)
+
+        self._layout.addWidget(card)
+
+    def _on_bluetooth_remote_toggled(self, checked: bool) -> None:
+        """Update setting and reset client."""
+        try:
+            self._repository.update({"bluetooth_remote.enabled": bool(checked)})
+        except SettingsError as exc:
+            self._bluetooth_remote_status.setText(f"Status: Error — {exc}")
+            return
+        reset_bluetooth_client()
+        self._refresh_bluetooth_remote_state()
+
+    def _refresh_bluetooth_remote_state(self) -> None:
+        enabled = bool(self._repository.get("bluetooth_remote.enabled", False))
+        self._bluetooth_remote_enable.setChecked(enabled)
+        if enabled:
+            self._bluetooth_remote_status.setText("Status: Enabled — pair phone via Bluetooth, enable PAN tethering")
+        else:
+            self._bluetooth_remote_status.setText("Status: Disabled")
+
+    # -- wan remote ---------------------------------------------------
+    def _build_wan_remote(self) -> None:
+        card, layout = _card(
+            "Internet / WAN Remote",
+            "Control phone over internet via self-hosted relay server. "
+            "Requires TLS certificates and relay deployment.",
+        )
+
+        self._wan_remote_enable = QCheckBox("Enable Internet/WAN remote control")
+        self._wan_remote_enable.setChecked(bool(self._repository.get("wan_remote.enabled", False)))
+        self._wan_remote_enable.toggled.connect(self._on_wan_remote_toggled)
+        layout.addWidget(self._wan_remote_enable)
+
+        # Relay URL
+        relay_row = QHBoxLayout()
+        relay_row.setSpacing(8)
+        relay_label = QLabel("Relay URL:")
+        relay_label.setMinimumWidth(120)
+        self._wan_relay_url = QComboBox()
+        self._wan_relay_url.setEditable(True)
+        self._wan_relay_url.addItems(["wss://relay.example.com:443", "wss://your-relay:8443"])
+        current_url = str(self._repository.get("wan_remote.relay_url", ""))
+        if current_url:
+            self._wan_relay_url.setCurrentText(current_url)
+        relay_row.addWidget(relay_label)
+        relay_row.addWidget(self._wan_relay_url, 1)
+        layout.addLayout(relay_row)
+
+        # Cert path
+        cert_row = QHBoxLayout()
+        cert_row.setSpacing(8)
+        cert_label = QLabel("Cert path:")
+        cert_label.setMinimumWidth(120)
+        self._wan_cert_path = QComboBox()
+        self._wan_cert_path.setEditable(True)
+        self._wan_cert_path.addItems(["MAYA AI/security/certs/wan_cert.pem"])
+        current_cert = str(self._repository.get("wan_remote.cert_path", ""))
+        if current_cert:
+            self._wan_cert_path.setCurrentText(current_cert)
+        cert_row.addWidget(cert_label)
+        cert_row.addWidget(self._wan_cert_path, 1)
+        layout.addLayout(cert_row)
+
+        # Key path
+        key_row = QHBoxLayout()
+        key_row.setSpacing(8)
+        key_label = QLabel("Key path:")
+        key_label.setMinimumWidth(120)
+        self._wan_key_path = QComboBox()
+        self._wan_key_path.setEditable(True)
+        self._wan_key_path.addItems(["MAYA AI/security/certs/wan_key.pem"])
+        current_key = str(self._repository.get("wan_remote.key_path", ""))
+        if current_key:
+            self._wan_key_path.setCurrentText(current_key)
+        key_row.addWidget(key_label)
+        key_row.addWidget(self._wan_key_path, 1)
+        layout.addLayout(key_row)
+
+        self._wan_remote_status = QLabel("Status: Disabled")
+        self._wan_remote_status.setObjectName("emptyHint")
+        layout.addWidget(self._wan_remote_status)
+
+        self._layout.addWidget(card)
+
+    def _on_wan_remote_toggled(self, checked: bool) -> None:
+        """Update setting and reset client."""
+        try:
+            self._repository.update({
+                "wan_remote.enabled": bool(checked),
+                "wan_remote.relay_url": self._wan_relay_url.currentText(),
+                "wan_remote.cert_path": self._wan_cert_path.currentText(),
+                "wan_remote.key_path": self._wan_key_path.currentText(),
+            })
+        except SettingsError as exc:
+            self._wan_remote_status.setText(f"Status: Error — {exc}")
+            return
+        reset_wan_client()
+        self._refresh_wan_remote_state()
+
+    def _refresh_wan_remote_state(self) -> None:
+        enabled = bool(self._repository.get("wan_remote.enabled", False))
+        self._wan_remote_enable.setChecked(enabled)
+        if enabled:
+            self._wan_remote_status.setText("Status: Enabled — configure relay URL + certs, then connect")
+        else:
+            self._wan_remote_status.setText("Status: Disabled")
+
     # -- phone server -------------------------------------------------
-        """The app-wide server instance (shared with auto-start)."""
-        if self._server is None:
-            self._server = self._server_factory()
-        return self._server
 
     def showEvent(self, event) -> None:  # noqa: N802 - Qt signature
         self._refresh_server_state()
@@ -403,6 +527,8 @@ class SettingsPage(QScrollArea):
         )
         self._start_minimized.setChecked(bool(self._repository.get("ui.start_minimized", False)))
         self._refresh_phone_remote_state()
+        self._refresh_bluetooth_remote_state()
+        self._refresh_wan_remote_state()
 
     def _changes(self) -> dict[str, Any]:
         return {

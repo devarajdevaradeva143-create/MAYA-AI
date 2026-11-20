@@ -205,6 +205,11 @@ _SCHEMA: dict[str, Callable[[Any], Any]] = {
     "ui.start_minimized": _as_bool,
     "ui.confirm_destructive": _as_bool,
     "phone_remote.enabled": _as_bool,
+    "bluetooth_remote.enabled": _as_bool,
+    "wan_remote.enabled": _as_bool,
+    "wan_remote.relay_url": _as_url,
+    "wan_remote.cert_path": _as_text(300),
+    "wan_remote.key_path": _as_text(300),
 }
 
 
