@@ -25,8 +25,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.services.server_service import shared_server_service
 from app.services import autostart_service
+from app.services.phone_remote_client import reset_phone_remote_client
+from app.services.server_service import shared_server_service
 from app.settings_repository import SettingsError, SettingsRepository
 from app.ui.theme import MODES, ThemeManager
 from app.ui.workers import ServerStartWorker
@@ -81,6 +82,7 @@ class SettingsPage(QScrollArea):
 
         self._build_appearance()
         self._build_startup()
+        self._build_phone_remote()
         self._build_server()
         self._build_footer()
 
@@ -181,7 +183,44 @@ class SettingsPage(QScrollArea):
 
         self._layout.addWidget(card)
 
-    def _server_instance(self):
+    # -- phone remote -------------------------------------------------
+    def _build_phone_remote(self) -> None:
+        card, layout = _card(
+            "Phone Remote",
+            "Allow this laptop to control a paired phone (screen view, input, files). "
+            "Requires the phone app to have 'Allow laptop control' enabled.",
+        )
+
+        self._phone_remote_enable = QCheckBox("Allow laptop to control paired phone")
+        self._phone_remote_enable.setChecked(bool(self._repository.get("phone_remote.enabled", False)))
+        self._phone_remote_enable.toggled.connect(self._on_phone_remote_toggled)
+        layout.addWidget(self._phone_remote_enable)
+
+        self._phone_remote_status = QLabel("Status: Disabled")
+        self._phone_remote_status.setObjectName("emptyHint")
+        layout.addWidget(self._phone_remote_status)
+
+        self._layout.addWidget(card)
+
+    def _on_phone_remote_toggled(self, checked: bool) -> None:
+        """Update setting and reset client."""
+        try:
+            self._repository.update({"phone_remote.enabled": bool(checked)})
+        except SettingsError as exc:
+            self._phone_remote_status.setText(f"Status: Error — {exc}")
+            return
+        reset_phone_remote_client()
+        self._refresh_phone_remote_state()
+
+    def _refresh_phone_remote_state(self) -> None:
+        enabled = bool(self._repository.get("phone_remote.enabled", False))
+        self._phone_remote_enable.setChecked(enabled)
+        if enabled:
+            self._phone_remote_status.setText("Status: Enabled — pair phone and open Phone Remote tab")
+        else:
+            self._phone_remote_status.setText("Status: Disabled")
+
+    # -- phone server -------------------------------------------------
         """The app-wide server instance (shared with auto-start)."""
         if self._server is None:
             self._server = self._server_factory()
@@ -235,6 +274,12 @@ class SettingsPage(QScrollArea):
     def _is_server_starting(self) -> bool:
         worker = self._server_start_worker
         return worker is not None and worker.isRunning()
+
+    def _server_instance(self):
+        """The app-wide server instance (shared with auto-start)."""
+        if self._server is None:
+            self._server = self._server_factory()
+        return self._server
 
     def _on_server_start(self) -> None:
         """Queue the server boot on a worker thread and return immediately."""
@@ -357,6 +402,7 @@ class SettingsPage(QScrollArea):
             bool(self._repository.get("ui.minimize_to_tray", True))
         )
         self._start_minimized.setChecked(bool(self._repository.get("ui.start_minimized", False)))
+        self._refresh_phone_remote_state()
 
     def _changes(self) -> dict[str, Any]:
         return {

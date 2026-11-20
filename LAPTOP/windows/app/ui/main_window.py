@@ -26,6 +26,7 @@ from app.settings_repository import SettingsRepository
 from app.ui.pages.chat_page import ChatPage
 from app.ui.pages.monitor_page import MonitorPage
 from app.ui.pages.pc_page import PCPage
+from app.ui.pages.phone_remote_page import PhoneRemotePage
 from app.ui.pages.security_page import SecurityPage
 from app.ui.pages.settings_page import SettingsPage
 from app.ui.pages.teacher_page import TeacherPage
@@ -42,6 +43,7 @@ PAGE_HINTS: dict[str, tuple[str, str]] = {
     "voice": ("🎤", "Push-to-talk, TTS and wake words arrive in Phase 4."),
     "pc": ("🖥️", "Apps, files, commands and permissions arrive in Phase 5."),
     "monitor": ("📊", "CPU / RAM / GPU / battery cards arrive in Phase 6."),
+    "phone_remote": ("📱", "Control paired phone: screen view, input, files arrive in Phase 12."),
     "teacher": ("📚", "Grammar, vocabulary and pronunciation coaching arrive in Phase 7."),
     "security": ("🔒", "PIN lock, Windows Hello and the watchdog arrive in Phase 8."),
 }
@@ -169,6 +171,9 @@ class MayaMainWindow(QMainWindow):
             page = PCPage(control=self._control)
         elif key == "monitor":
             page = MonitorPage()
+        elif key == "phone_remote":
+            page = PhoneRemotePage(repository=self._repository)
+            page.status_changed.connect(self.set_status)
         elif key == "teacher":
             page = TeacherPage(voice=self._voice_adapter)
         elif key == "security":

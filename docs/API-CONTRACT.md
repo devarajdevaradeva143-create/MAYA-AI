@@ -685,6 +685,142 @@ releases control. AI task execution itself stays on the laptop.
 
 ---
 
+## 9C. Phone remote (laptop controls phone)
+
+**New in v1.1** — Laptop initiates control session on paired phone.
+
+### Flow
+
+1. Laptop UI → `POST /phone/remote/start` (auth: paired phone token)
+2. Phone shows **confirmation dialog** (user must Allow)
+3. Phone returns `session_token` + `ws_url` for screen stream
+4. Laptop connects WebSocket → receives JPEG frames
+5. Laptop sends input events via `POST /phone/remote/input` or WS
+6. Either side can stop: `POST /phone/remote/stop` or phone notification
+
+### Endpoints (on PHONE server)
+
+Phone runs a minimal HTTP server on port **8421** (LAN only) when "Allow laptop control" is enabled.
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| POST | `/phone/remote/start` | Paired token | Start session, returns `{session_token, ws_url, expires_in}` |
+| POST | `/phone/remote/stop` | Session token | Stop session |
+| GET | `/phone/remote/status` | Session token | `{active, expires_in, controller}` |
+| POST | `/phone/remote/input` | Session token | Inject input events |
+| WS | `/phone/remote/ws?token=<session_token>` | Session token | Binary JPEG frames (server→client) + input ack (client→server) |
+| GET | `/phone/remote/screen` | Session token | MJPEG stream (fallback) |
+| POST | `/phone/remote/files/list` | Session token | List files in allowed root |
+| GET | `/phone/remote/files/download` | Session token | Download file |
+| POST | `/phone/remote/files/upload` | Session token | Upload file |
+
+### `POST /phone/remote/start`
+
+**Request:**
+```json
+{ "max_width": 1280, "quality": 60, "fps": 10 }
+```
+
+**Response (200):**
+```json
+{
+  "session_token": "maya_<43 chars>",
+  "ws_url": "ws://<phone-ip>:8421/phone/remote/ws?token=...",
+  "expires_in": 300,
+  "screen": { "width": 1080, "height": 2400, "density": 3.0 }
+}
+```
+
+**Errors:**
+- `409` — session already active
+- `403` — "Allow laptop control" disabled in phone settings
+- `400` — invalid params
+
+### `POST /phone/remote/input`
+
+**Request:**
+```json
+{
+  "session_token": "...",
+  "events": [
+    { "type": "move", "x": 0.5, "y": 0.3 },
+    { "type": "click", "button": "left" },
+    { "type": "scroll", "dy": -3 },
+    { "type": "text", "text": "hello" },
+    { "type": "key", "key": "back" },
+    { "type": "key", "key": "home" },
+    { "type": "key", "key": "recents" }
+  ]
+}
+```
+
+**Response:** `{ "applied": 3 }`
+
+**Errors:** `401` (invalid/expired token), `403` (secure window), `400` (bad event)
+
+### WebSocket `/phone/remote/ws`
+
+**Server → Client (binary frames):**
+- Each frame = JPEG image (Content-Type not sent, binary only)
+- Frame rate ≤ requested `fps`
+- Phone sends frames only when screen content changes
+
+**Client → Server (JSON text):**
+```json
+{ "type": "input", "events": [...] }  // same as POST /input
+{ "type": "ping" }
+```
+
+**Server → Client (JSON text, occasional):**
+```json
+{ "type": "screen_info", "width": 1080, "height": 2400, "density": 3.0 }
+{ "type": "error", "message": "secure window" }
+{ "type": "pong" }
+```
+
+### File operations
+
+Allowed roots = user-selected folders via SAF (persisted URI permissions).
+
+**List:**
+```
+POST /phone/remote/files/list
+{ "session_token": "...", "path": "/Documents" }
+→ { "path": "...", "entries": [{ "name": "file.txt", "is_dir": false, "size": 1234 }] }
+```
+
+**Download:**
+```
+GET /phone/remote/files/download?session_token=...&path=/Documents/file.txt
+→ file stream (octet-stream)
+```
+
+**Upload:**
+```
+POST /phone/remote/files/upload
+multipart: session_token, path=/Documents/, file=<bytes>
+→ { "size": 1234 }
+```
+
+### Session rules
+
+- Max 1 active session per paired laptop
+- TTL: 5 min (sliding, reset on activity)
+- Phone shows persistent notification "Remote control active — Tap to stop"
+- Secure windows (banking, password fields) → input rejected, error sent
+- Phone user can stop anytime via notification or Settings
+
+### Rate limits
+
+| Scope | Limit |
+|---|---|
+| `/phone/remote/start` | 2 / min |
+| `/phone/remote/input` | 600 / min |
+| `/phone/remote/ws` | 1 concurrent |
+| `/phone/remote/files/*` | 30 / min |
+
+---
+
 ## 10. Events WebSocket
 
 ### `WS /ws/events?token=<token>`

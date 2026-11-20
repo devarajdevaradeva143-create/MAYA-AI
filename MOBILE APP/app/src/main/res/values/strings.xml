@@ -189,6 +189,13 @@
     <string name="control_notification_channel_desc">Persistent notice while phone control is enabled</string>
     <string name="control_notification_stop">Turn off</string>
 
+    <!-- Phone Remote (Phase 6) -->
+    <string name="phone_remote_notification_title">Remote control active</string>
+    <string name="phone_remote_notification_body">Laptop is controlling this phone. Tap to stop.</string>
+    <string name="phone_remote_notification_channel">Maya phone remote</string>
+    <string name="phone_remote_notification_channel_desc">Active remote control session from laptop</string>
+    <string name="phone_remote_notification_stop">Stop remote control</string>
+
     <string name="phone_log_enabled">enabled</string>
     <string name="phone_log_disabled">disabled</string>
     <string name="phone_log_cancelled">cancelled by user</string>

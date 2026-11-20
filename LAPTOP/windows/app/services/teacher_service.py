@@ -10,7 +10,11 @@ from typing import Any
 
 from custom.tools.teacher_service import (
     LEVELS as _LEVELS,
+)
+from custom.tools.teacher_service import (
     TOPICS as _TOPICS,
+)
+from custom.tools.teacher_service import (
     TeacherService as CoreTeacherService,
 )
 

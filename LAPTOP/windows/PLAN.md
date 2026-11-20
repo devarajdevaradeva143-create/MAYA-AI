@@ -20,6 +20,7 @@
 | 9 — Pairing + phone server (real-engine E2E verified) | ✅ |
 | 10 — Tray / autostart | ✅ |
 | 11 — Packaging + docs | ✅ |
+| 12 — Phone Remote (laptop controls phone) | 🔄 Planned |
 
 **All 161 tests pass, ruff clean.**
 
@@ -44,5 +45,6 @@
 | **9** | Pairing + phone server: real-engine E2E verified (health 200, claim 200, chat 200, revoke 200) | ✅ |
 | **10** | Tray/Autostart: minimize to system tray, tray menu (Open/Quit), autostart registry key | ✅ |
 | **11** | Packaging + docs: PyInstaller build, README/HANDOFF update | ✅ |
+| **12** | Phone Remote: PhoneRemotePage (screen view, input controls, file browser), WebSocket client for screen stream, session start/stop with phone confirm, Settings toggle | 🔄 Planned |
 
 **Author:** Vera AI (Nemotron 3.5 Lightning Free) — local-first personal AI assistant for Windows + Fedora.

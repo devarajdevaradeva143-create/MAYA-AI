@@ -1501,6 +1501,64 @@ App must show this exact hint + button to app info screen. Without it, toggle is
 
 ---
 
+## 19A. Phone remote (laptop controls phone)
+
+**New feature** — Laptop UI controls paired phone (screen view + input + files).
+
+### 19A.1 Phone side requirements
+
+**Screen capture (MediaProjection):**
+- `MediaProjectionManager.createScreenCaptureIntent()` → user grants permission
+- `VirtualDisplay` + `ImageReader` → capture frames as JPEG
+- Stream via WebSocket or HTTP MJPEG to laptop
+- Config: max_width (default 1280), quality (default 60), fps (default 10)
+
+**Input injection (AccessibilityService):**
+- Reuse existing `MayaAccessibilityService.kt` (§18.3)
+- Expose internal methods: `click(x,y)`, `swipe(x1,y1,x2,y2)`, `type(text)`, `key(keycode)`, `scroll(dx,dy)`, `back()`, `home()`, `recents()`
+- Secure window check → reject input on protected screens
+
+**API endpoints on phone (HTTP + WebSocket):**
+- `POST /phone/remote/start` — start session, returns session_token + WebSocket URL
+- `POST /phone/remote/stop` — stop session
+- `POST /phone/remote/input` — inject input events (requires session_token)
+- `GET /phone/remote/screen` — MJPEG stream (alternative to WS)
+- `WS /phone/remote/ws` — binary frames (JPEG) + input ack
+- `POST /phone/remote/files` — file browse/download/upload (SAF, within allowed roots)
+
+**Session management:**
+- Short-lived tokens (5 min default, sliding expiry)
+- User confirmation required on phone before session starts
+- Phone shows persistent notification "Remote control active" with Stop button
+- Only one active session per paired laptop
+
+**Permissions:**
+- `FOREGROUND_SERVICE_MEDIA_PROJECTION` (Android 14+)
+- `BIND_ACCESSIBILITY_SERVICE` (already in manifest)
+- User must enable Accessibility + grant MediaProjection each session
+
+### 19A.2 Laptop side requirements
+
+**New UI page:** "Phone Remote" tab (visible only when phone connected)
+
+**Features:**
+- Screen view (live JPEG stream via WebSocket)
+- Touch/click/drag on screen → sends input events
+- On-screen keyboard → send text
+- Hardware key buttons (Back, Home, Recents, Enter, Esc, Tab, arrows)
+- File browser (phone allowed roots)
+- Hybrid mode indicator (AI + user sharing control)
+- Session start/stop with confirmation dialog
+
+**Integration:**
+- Uses existing pairing tokens
+- Phone remote session separate from laptop remote session
+- Settings toggle: "Allow laptop to control this phone"
+
+---
+
+## 20. Monitoring (app side)
+
 ## 20. Monitoring (app side)
 
 - Laptop: poll 2 s while visible; WS events when available.
@@ -1756,6 +1814,35 @@ Tasks:
 - About + licenses.
 - Full test pass.
 - Release keystore + signed APK.
+
+**DoD:**
+- `assembleRelease` → signed APK.
+- All unit + instrumented tests pass.
+- Privacy export/delete works.
+
+### Phase 13 — Phone remote (laptop controls phone)
+
+Tasks:
+- Phone: MediaProjection screen capture + JPEG encoding
+- Phone: AccessibilityService input injection methods
+- Phone: HTTP/WebSocket endpoints for remote session
+- Phone: Foreground service with persistent notification
+- Phone: File operations via SAF within allowed roots
+- Laptop: PhoneRemotePage UI (screen view + input controls)
+- Laptop: WebSocket client for screen stream + input send
+- Integration: Pairing token auth, session confirm on phone
+- Settings: "Allow laptop to control this phone" toggle
+
+**DoD:**
+- Phone grants MediaProjection → laptop sees live screen
+- Laptop tap/swipe/type → executes on phone
+- File browse/download/upload works
+- Session confirm dialog on phone
+- Stop session from laptop or phone notification
+- Works over LAN (WiFi) + USB (adb reverse)
+- No regression in existing phone/laptop control
+
+---
 
 **DoD:**
 - `.\gradlew.bat test` green.

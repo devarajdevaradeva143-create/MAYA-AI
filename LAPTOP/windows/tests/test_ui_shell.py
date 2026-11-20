@@ -52,7 +52,7 @@ def test_sidebar_has_all_seven_sections(window: MayaMainWindow) -> None:
     keys = tuple(key for key, _icon, _label in NAV_ITEMS)
 
     assert window.sidebar.keys() == keys
-    assert len(keys) == 7
+    assert len(keys) == 8
 
 
 def test_navigation_switches_every_page(window: MayaMainWindow) -> None:

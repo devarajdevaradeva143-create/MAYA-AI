@@ -204,6 +204,7 @@ _SCHEMA: dict[str, Callable[[Any], Any]] = {
     "ui.close_to_tray": _as_bool,
     "ui.start_minimized": _as_bool,
     "ui.confirm_destructive": _as_bool,
+    "phone_remote.enabled": _as_bool,
 }
 
 

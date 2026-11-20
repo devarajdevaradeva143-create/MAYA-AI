@@ -254,6 +254,7 @@ fun MayaNavHost(
             val settingsState by settingsVm.state.collectAsStateWithLifecycle()
             val appSettings by app.container.settingsStore.settings.collectAsStateWithLifecycle(initialValue = com.devaraj.maya.data.prefs.MayaSettings())
             val wakeRunning by com.devaraj.maya.service.WakeForegroundService.running.collectAsState()
+            val phoneRemoteRunning by com.devaraj.maya.service.PhoneRemoteForegroundService.running.collectAsState()
 
             SettingsScreen(
                 state = settingsState,
@@ -267,6 +268,8 @@ fun MayaNavHost(
                 onControlEnabledChange = settingsVm::setControlEnabled,
                 requireUnlock = appSettings.controlRequireUnlock,
                 onRequireUnlockChange = settingsVm::setRequireUnlock,
+                phoneRemoteEnabled = appSettings.phoneRemoteEnabled,
+                onPhoneRemoteChange = settingsVm::setPhoneRemoteEnabled,
                 onExport = settingsVm::exportData,
                 onDeleteAll = settingsVm::deleteAllData,
                 onConsumeExportStatus = settingsVm::consumeExportStatus,

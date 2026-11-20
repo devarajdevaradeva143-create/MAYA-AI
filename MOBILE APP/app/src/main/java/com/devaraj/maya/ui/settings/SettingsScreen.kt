@@ -49,6 +49,8 @@ fun SettingsScreen(
     onControlEnabledChange: (Boolean) -> Unit,
     requireUnlock: Boolean,
     onRequireUnlockChange: (Boolean) -> Unit,
+    phoneRemoteEnabled: Boolean,
+    onPhoneRemoteChange: (Boolean) -> Unit,
     onExport: (Uri) -> Unit,
     onDeleteAll: () -> Unit,
     onConsumeExportStatus: () -> Unit,
@@ -180,6 +182,23 @@ fun SettingsScreen(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
             FilterChip(selected = requireUnlock, onClick = { onRequireUnlockChange(true) }, label = { Text("Require unlock") })
             FilterChip(selected = !requireUnlock, onClick = { onRequireUnlockChange(false) }, label = { Text("No unlock") })
+        }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 24.dp))
+
+        Text(text = "Phone remote (laptop → phone)", style = MaterialTheme.typography.titleMedium)
+        Text(
+            text = "Allow your laptop to view the screen, inject input, and transfer files over LAN.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
+            FilterChip(
+                selected = phoneRemoteEnabled,
+                onClick = { onPhoneRemoteChange(true) },
+                label = { Text("Allow laptop to control this phone") },
+            )
         }
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 24.dp))

@@ -20,6 +20,7 @@ NAV_ITEMS: tuple[tuple[str, str, str], ...] = (
     ("voice", "🎤", "Voice"),
     ("pc", "🖥️", "PC Control"),
     ("monitor", "📊", "Monitoring"),
+    ("phone_remote", "📱", "Phone Remote"),
     ("teacher", "📚", "English Teacher"),
     ("security", "🔒", "Security"),
     ("settings", "⚙️", "Settings"),

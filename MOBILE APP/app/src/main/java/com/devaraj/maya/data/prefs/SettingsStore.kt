@@ -42,6 +42,7 @@ data class MayaSettings(
     val wakeNameEnabled: Boolean = false,
     val operatingMode: OperatingMode = OperatingMode.AI,
     val voiceBiometricsEnabled: Boolean = false,
+    val phoneRemoteEnabled: Boolean = false,
 ) {
     companion object {
         const val DEFAULT_PORT = 8420
@@ -66,6 +67,7 @@ class SettingsStore(private val context: Context) {
         val WAKE_NAME_ENABLED = booleanPreferencesKey("wake_name_enabled")
         val OPERATING_MODE = stringPreferencesKey("operating_mode")
         val VOICE_BIOMETRICS_ENABLED = booleanPreferencesKey("voice_biometrics_enabled")
+        val PHONE_REMOTE_ENABLED = booleanPreferencesKey("phone_remote_enabled")
     }
 
     val settings: Flow<MayaSettings> = context.mayaDataStore.data
@@ -84,6 +86,7 @@ class SettingsStore(private val context: Context) {
                 connectionMode = prefs[Keys.CONNECTION_MODE] ?: "wifi",
                 wakeNameEnabled = prefs[Keys.WAKE_NAME_ENABLED] ?: false,
                 operatingMode = OperatingMode.from(prefs[Keys.OPERATING_MODE]),
+                phoneRemoteEnabled = prefs[Keys.PHONE_REMOTE_ENABLED] ?: false,
             )
         }
 
@@ -137,6 +140,12 @@ class SettingsStore(private val context: Context) {
     suspend fun setOperatingMode(mode: OperatingMode) {
         context.mayaDataStore.edit { prefs ->
             prefs[Keys.OPERATING_MODE] = mode.value
+        }
+    }
+
+    suspend fun setPhoneRemoteEnabled(enabled: Boolean) {
+        context.mayaDataStore.edit { prefs ->
+            prefs[Keys.PHONE_REMOTE_ENABLED] = enabled
         }
     }
 

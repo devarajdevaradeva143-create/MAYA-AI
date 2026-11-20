@@ -14,6 +14,10 @@ import com.devaraj.maya.data.prefs.SettingsStore
 import com.devaraj.maya.data.secure.TokenVault
 import com.devaraj.maya.data.wake.VoskModelStatus
 import com.devaraj.maya.data.wake.VoskModelStore
+import com.devaraj.maya.service.MayaAccessibilityService
+import com.devaraj.maya.service.PhoneRemoteForegroundService
+import com.devaraj.maya.service.PhoneRemoteHttpServer
+import com.devaraj.maya.service.ScreenCaptureService
 import com.devaraj.maya.service.WakeForegroundService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -164,6 +168,23 @@ class SettingsViewModel(
 
     fun setRequireUnlock(required: Boolean) {
         viewModelScope.launch { settingsStore.setControlRequireUnlock(required) }
+    }
+
+    fun setPhoneRemoteEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsStore.setPhoneRemoteEnabled(enabled)
+            if (enabled) {
+                PhoneRemoteForegroundService.start(app)
+                // Start HTTP server if accessibility service is enabled
+                if (MayaAccessibilityService.isEnabled(app)) {
+                    val screenCapture = ScreenCaptureService.getInstance()
+                    PhoneRemoteHttpServer.start(app, MayaAccessibilityService.instance!!, screenCapture)
+                }
+            } else {
+                PhoneRemoteForegroundService.stop(app)
+                PhoneRemoteHttpServer.stop()
+            }
+        }
     }
 
     fun exportData(uri: Uri) {
