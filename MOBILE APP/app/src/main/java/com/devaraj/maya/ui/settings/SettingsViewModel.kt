@@ -174,15 +174,17 @@ class SettingsViewModel(
         viewModelScope.launch {
             settingsStore.setPhoneRemoteEnabled(enabled)
             if (enabled) {
-                PhoneRemoteForegroundService.start(app)
-                // Start HTTP server if accessibility service is enabled
-                if (MayaAccessibilityService.isEnabled(app)) {
-                    val screenCapture = ScreenCaptureService.getInstance()
-                    PhoneRemoteHttpServer.start(app, MayaAccessibilityService.instance!!, screenCapture)
+                val accessibility = MayaAccessibilityService.instance
+                // Foreground service is only startable while accessibility is bound
+                // (its exemption is what allows the background start on Android 12+).
+                if (accessibility != null) {
+                    PhoneRemoteForegroundService.start(app)
+                    // Start HTTP server if the accessibility service is connected
+                    PhoneRemoteHttpServer.start(app, accessibility, ScreenCaptureService.getInstance())
                 }
             } else {
-                PhoneRemoteForegroundService.stop(app)
                 PhoneRemoteHttpServer.stop()
+                PhoneRemoteForegroundService.stop(app)
             }
         }
     }
@@ -341,6 +343,10 @@ class SettingsViewModel(
 
     fun consumeExportStatus() { _state.update { it.copy(exportStatus = null) } }
     fun consumeDeleteStatus() { _state.update { it.copy(deleteStatus = null) } }
+
+    suspend fun setGeminiApiKey(key: String) {
+        settingsStore.setGeminiApiKey(key)
+    }
 
     class Factory(
         private val app: Application,

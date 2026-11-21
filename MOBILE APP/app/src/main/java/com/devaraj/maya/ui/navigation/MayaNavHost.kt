@@ -12,6 +12,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -38,6 +39,10 @@ import com.devaraj.maya.ui.phone.PhoneScreen
 import com.devaraj.maya.ui.phone.PhoneViewModel
 import com.devaraj.maya.ui.settings.SettingsScreen
 import com.devaraj.maya.ui.settings.SettingsViewModel
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import com.devaraj.maya.ui.voice.VoiceScreen
 import com.devaraj.maya.ui.voice.VoiceViewModel
 
@@ -86,6 +91,12 @@ fun MayaNavHost(
                     connectionRepository = app.container.connectionRepository,
                     apiClient = app.container.apiClient,
                     modelManager = app.container.onDeviceModel,
+                    geminiRepository = app.container.geminiRepository,
+                    geminiApiKey = {
+                        kotlinx.coroutines.runBlocking {
+                            app.container.settingsStore.settings.first().geminiApiKey
+                        }
+                    },
                 )
             }
             val chatViewModel: ChatViewModel = viewModel(factory = factory)
@@ -290,6 +301,12 @@ fun MayaNavHost(
                 voskMessage = settingsState.voskMessage,
                 onImportVosk = settingsVm::importVoskModel,
                 onDeleteVosk = settingsVm::deleteVoskModel,
+                geminiApiKey = appSettings.geminiApiKey,
+                onGeminiKeyChange = { key ->
+                    CoroutineScope(Dispatchers.IO).launch {
+                        settingsVm.setGeminiApiKey(key)
+                    }
+                },
             )
         }
     }

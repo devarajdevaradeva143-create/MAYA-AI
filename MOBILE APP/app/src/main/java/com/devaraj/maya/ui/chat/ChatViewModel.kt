@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.devaraj.maya.data.cloud.GeminiRepository
 import com.devaraj.maya.data.model.OnDeviceModelManager
 import com.devaraj.maya.data.model.PromptBuilder
 import com.devaraj.maya.data.remote.ApiClient
@@ -43,12 +44,13 @@ data class ChatUiState(
     val errorReason: MayaErrorReason? = null,
     val errorMessage: String? = null,
     val phoneModelReady: Boolean = false,
+    val cloudReady: Boolean = false,
     val localGenerating: Boolean = false,
 ) {
     val connected: Boolean get() = connection is ConnectionState.Connected
 
-    /** Laptop online, or the on-device fallback model is installed. */
-    val canSend: Boolean get() = connected || phoneModelReady
+    /** Laptop online, phone model installed, or cloud key configured. */
+    val canSend: Boolean get() = connected || phoneModelReady || cloudReady
 
     companion object {
         const val PERSONA_MAYA = "maya"
@@ -65,6 +67,8 @@ class ChatViewModel(
     private val connectionRepository: ConnectionRepository,
     apiClient: ApiClient,
     private val modelManager: OnDeviceModelManager,
+    private val geminiRepository: GeminiRepository,
+    private val geminiApiKey: () -> String,
 ) : ViewModel() {
 
     private val socket = ChatSocket(apiClient, viewModelScope)
@@ -102,6 +106,10 @@ class ChatViewModel(
         viewModelScope.launch {
             socket.events.collect { event -> handleEvent(event) }
         }
+        viewModelScope.launch {
+            // Cloud readiness: API key non-blank = cloud available
+            _state.update { it.copy(cloudReady = geminiApiKey().isNotBlank()) }
+        }
     }
 
     private fun openConversation(id: String) {
@@ -128,10 +136,16 @@ class ChatViewModel(
 
         viewModelScope.launch {
             chatRepository.addUserMessage(conversationId, trimmed)
-            if (_state.value.connected) {
-                beginStream(conversationId)
-            } else {
-                beginLocalReply(conversationId)
+            when {
+                _state.value.connected -> beginStream(conversationId)
+                _state.value.phoneModelReady -> beginLocalReply(conversationId)
+                _state.value.cloudReady -> beginCloudReply(conversationId)
+                else -> _state.update {
+                    it.copy(
+                        errorReason = MayaErrorReason.NO_CONNECTION,
+                        errorMessage = "No AI source available (laptop offline, no phone model, no Gemini key)",
+                    )
+                }
             }
         }
     }
@@ -261,9 +275,90 @@ class ChatViewModel(
                 finishStream(MessageStatus.SENT)
             },
             onFailure = { error ->
+                // Phone model failed -> try cloud if key is configured
+                if (_state.value.cloudReady) {
+                    beginCloudReply(conversationId)
+                } else {
+                    failStream(
+                        reason = MayaErrorReason.UNKNOWN,
+                        message = "Phone model: ${error.message ?: "generation failed"}",
+                    )
+                }
+            },
+        )
+    }
+
+    /**
+     * Cloud fallback (Gemini): send history to Google Gemini.
+     * Only used when laptop is offline AND phone model is not ready.
+     * Requires an API key in Settings.
+     */
+    private suspend fun beginCloudReply(conversationId: String) {
+        if (!_state.value.cloudReady) {
+            failStream(reason = MayaErrorReason.NO_CONNECTION, message = "No Gemini API key")
+            return
+        }
+
+        val history = chatRepository.historyForRequest(conversationId)
+        if (history.isEmpty()) return
+
+        val messages = history.mapNotNull { msg ->
+            when (msg.role) {
+                MessageRole.USER -> GeminiRepository.GeminiMessage("user", msg.content)
+                MessageRole.MAYA, MessageRole.ASSISTANT -> if (msg.content.isNotBlank()) {
+                    GeminiRepository.GeminiMessage("assistant", msg.content)
+                } else null
+                MessageRole.SYSTEM -> null
+            }
+        }
+        if (messages.isEmpty()) return
+
+        val reply = chatRepository.startStreamingReply(
+            conversationId,
+            source = AiSource.CLOUD,
+            model = "gemini-3.5-flash-lite",
+        )
+        streamingMessageId = reply.id
+        streamBuffer = StringBuffer()
+        _state.update {
+            it.copy(
+                streaming = true,
+                localGenerating = true,
+                errorReason = null,
+                errorMessage = null,
+            )
+        }
+        startFlush(reply.id)
+
+        val result = withContext(Dispatchers.IO) {
+            runCatching {
+                geminiRepository.chat(
+                    messages = messages,
+                    systemPrompt = if (_state.value.persona == ChatUiState.PERSONA_TEACHER) {
+                        "You are Maya, an English teacher. Help the user learn English."
+                    } else {
+                        "You are Maya, a personal AI assistant. Reply concisely."
+                    },
+                    maxTokens = 1024,
+                )
+            }
+        }
+
+        if (localStopRequested) {
+            localStopRequested = false
+            finishStream(MessageStatus.STOPPED)
+            return
+        }
+
+        result.fold(
+            onSuccess = { text ->
+                streamBuffer = StringBuffer(text)
+                finishStream(MessageStatus.SENT)
+            },
+            onFailure = { error ->
                 failStream(
                     reason = MayaErrorReason.UNKNOWN,
-                    message = "Phone model: ${error.message ?: "generation failed"}",
+                    message = "Gemini: ${error.message ?: "cloud request failed"}",
                 )
             },
         )
@@ -374,6 +469,7 @@ class ChatViewModel(
             when {
                 _state.value.connected -> beginStream(conversationId)
                 _state.value.phoneModelReady -> beginLocalReply(conversationId)
+                _state.value.cloudReady -> beginCloudReply(conversationId)
                 else -> _state.update { it.copy(errorReason = MayaErrorReason.NO_CONNECTION) }
             }
         }
@@ -428,13 +524,18 @@ class ChatViewModel(
         private val connectionRepository: ConnectionRepository,
         private val apiClient: ApiClient,
         private val modelManager: OnDeviceModelManager,
+        private val geminiRepository: GeminiRepository,
+        private val geminiApiKey: () -> String,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             require(modelClass.isAssignableFrom(ChatViewModel::class.java)) {
                 "Unknown ViewModel: ${modelClass.name}"
             }
-            return ChatViewModel(chatRepository, connectionRepository, apiClient, modelManager) as T
+            return ChatViewModel(
+                chatRepository, connectionRepository, apiClient,
+                modelManager, geminiRepository, geminiApiKey,
+            ) as T
         }
     }
 

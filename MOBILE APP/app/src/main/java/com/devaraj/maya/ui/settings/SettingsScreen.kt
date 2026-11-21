@@ -18,6 +18,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -68,6 +69,8 @@ fun SettingsScreen(
     voskMessage: String? = null,
     onImportVosk: (Uri) -> Unit = {},
     onDeleteVosk: () -> Unit = {},
+    geminiApiKey: String = "",
+    onGeminiKeyChange: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var confirmDelete by remember { mutableStateOf(false) }
@@ -198,6 +201,36 @@ fun SettingsScreen(
                 selected = phoneRemoteEnabled,
                 onClick = { onPhoneRemoteChange(true) },
                 label = { Text("Allow laptop to control this phone") },
+            )
+        }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 24.dp))
+
+        Text(text = "Cloud AI (Gemini)", style = MaterialTheme.typography.titleMedium)
+        Text(
+            text = "When laptop and phone model are both offline, Maya can use Google Gemini. " +
+                "Your messages go to Google's servers — only prompts, no local files. " +
+                "Get a free key at aistudio.google.com/app/apikey.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+        var geminiKey by remember { mutableStateOf(geminiApiKey) }
+        LaunchedEffect(geminiApiKey) { geminiKey = geminiApiKey }
+        OutlinedTextField(
+            value = geminiKey,
+            onValueChange = { geminiKey = it; onGeminiKeyChange(it) },
+            label = { Text("Gemini API key") },
+            placeholder = { Text("AIza...") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+        )
+        if (geminiKey.isNotBlank()) {
+            Text(
+                text = "Key saved · ${geminiKey.take(4)}...${geminiKey.takeLast(4)}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(top = 2.dp),
             )
         }
 

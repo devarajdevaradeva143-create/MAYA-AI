@@ -275,6 +275,7 @@ private fun MessageBubble(
                     isUser -> stringResource(R.string.chat_you)
                     message.source == AiSource.LAPTOP -> stringResource(R.string.chat_source_laptop)
                     message.source == AiSource.PHONE -> stringResource(R.string.chat_source_phone)
+                    message.source == AiSource.CLOUD -> stringResource(R.string.chat_source_cloud)
                     else -> ""
                 },
                 style = MaterialTheme.typography.labelSmall,

@@ -39,21 +39,22 @@
 
 | # | Item | Notes |
 |---|---|---|
-| 1 | Phase 9 on-device model test | Airplane mode reply, cancel, unload, tok/s + RAM measurement (DoD unverified) |
-| 2 | Phase 10 Vosk name detection | ✅ Implemented — `NameWakeDetector` (16 kHz mono Vosk), 3× Maya in 10 s, model import UI. Build + unit tests pass. Physical mic test pending (user) |
+| 1 | Phase 9 on-device model test | ✅ Done (21 Nov) — MiniPLM 200M (158 MB) imported, chat reply verified. 2B tamil-lm-2b + Qwen3-1.7B + Llama-3.2-1B also available. |
+| 2 | Phase 10 Vosk name detection | ✅ Done (21 Nov) — `NameWakeDetector` (16 kHz mono Vosk), 3× Maya in 10 s, model import UI. Build + unit tests pass. Physical mic test verified (wake word detected). Vosk model `vosk-model-small-en-us-0.15.zip` pushed to phone. |
 | 3 | Phase 11 USB/BT manual test | Not run |
 | 4 | Physical remote-control test | Screen/input/files exercised on Infinix X6857B ✅ (verified) |
 | 5 | Internet/WAN remote | Milestones 1–2 done; relay deploy/TLS = user action |
-| 7 | Model switch to tamil-lm-2b | ✅ Done (20 Nov) — `OnDeviceModelManager` points at `tamil-lm-2b-instruct-q4_k_m.gguf` (~1.3 GB); a previously imported Qwen3 1.7B file still loads and is deleted on the next import. Physical on-device reply test pending (user). |
+| 7 | Model switch to tamil-lm-2b | ✅ Done (20 Nov) — model switched. Multiple phone models available: MiniPLM 200M, Llama-3.2-1B, Qwen3-1.7B, tamil-lm-2b (2B). Physical on-device reply verified (21 Nov). |
 | 8 | Maya AI-drafted WhatsApp message | ✅ Implemented — "Send to WhatsApp" prefill via `wa.me` + `ACTION_VIEW`; user picks contact and presses Send |
+| 9 | Gemini cloud on mobile | ✅ Done (21 Nov) — `GeminiRepository` added; chat flow laptop → phone → cloud; Settings → Cloud AI key input; `gemini-3.5-flash-lite` model; Cloud badge; key + model synced with laptop `.env` |
 
 ## 4. Cross-cutting pending (laptop)
 
 | # | Item | Notes |
 |---|---|---|
-| 1 | `maya-cloud` live call | Code complete; no key configured. Run `maya-cloud set-key` (see `docs/CLOUD.md`) |
-| 2 | Knowledge embeddings upgrade | ⚠️ Code/config supports it; needs ~512 MB model download + reindex with `--reset` (user action) |
-| 3 | Cloud Gemini | Live key pending (user action) |
+| 1 | `maya-cloud` live call | ✅ Done (21 Nov) — Gemini API key configured, `gemini-3.5-flash-lite`, test call verified |
+| 2 | Knowledge embeddings upgrade | ✅ Done (21 Nov) — `potion-multilingual-128M` (~512 MB) downloaded, `docs/` reindexed: 17 files, 308 chunks, 308 vectors. Hybrid (BM25 + multilingual) active. |
+| 3 | Cloud Gemini | ✅ Done (21 Nov) — key + model synced (`settings.yaml` + `.env`); mobile app cloud fallback ready |
 
 ### 3a. AI-only work completed (19 Nov, second pass)
 

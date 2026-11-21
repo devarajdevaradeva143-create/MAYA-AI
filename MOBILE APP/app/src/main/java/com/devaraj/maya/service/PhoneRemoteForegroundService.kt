@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.devaraj.maya.MainActivity
 import com.devaraj.maya.R
@@ -22,6 +23,7 @@ import kotlinx.coroutines.flow.StateFlow
 class PhoneRemoteForegroundService : Service() {
 
     companion object {
+        private const val TAG = "PhoneRemoteService"
         private const val CHANNEL_ID = "maya_phone_remote"
         private const val NOTIFICATION_ID = 4102
         const val ACTION_START = "com.devaraj.maya.action.PHONE_REMOTE_START"
@@ -67,8 +69,17 @@ class PhoneRemoteForegroundService : Service() {
                 stopSelf()
             }
             else -> {
-                setRunning(true)
-                startForeground(NOTIFICATION_ID, buildNotification())
+                // Android 12+ blocks foreground starts from the background unless
+                // the app holds a system-bound service (e.g. accessibility). Never
+                // let that rejection crash the app; just stop quietly instead.
+                try {
+                    startForeground(NOTIFICATION_ID, buildNotification())
+                    setRunning(true)
+                } catch (e: Exception) {
+                    Log.w(TAG, "startForeground rejected; stopping service", e)
+                    setRunning(false)
+                    stopSelf()
+                }
             }
         }
         return START_STICKY

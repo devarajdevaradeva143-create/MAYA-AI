@@ -258,7 +258,7 @@ class PhoneRemotePage(QWidget):
             return
 
         self._start_btn.setEnabled(False)
-        self._status_changed.emit("Starting session…", "warn")
+        self.status_changed.emit("Starting session…", "warn")
 
         def _worker():
             try:
@@ -276,7 +276,7 @@ class PhoneRemotePage(QWidget):
                     raise RuntimeError(result.get("detail", "Unknown response"))
             except Exception as e:
                 logger.error("Start session failed: %s", e)
-                self._status_changed.emit(f"Failed: {e}", "error")
+                self.status_changed.emit(f"Failed: {e}", "error")
                 self._start_btn.setEnabled(True)
 
         threading.Thread(target=_worker, daemon=True).start()
@@ -317,7 +317,7 @@ class PhoneRemotePage(QWidget):
                 self._on_session_started()
             except Exception as e:
                 logger.error("Confirm session failed: %s", e)
-                self._status_changed.emit(f"Failed: {e}", "error")
+                self.status_changed.emit(f"Failed: {e}", "error")
                 self._hide_confirm_dialog()
                 self._start_btn.setEnabled(True)
 
@@ -326,7 +326,7 @@ class PhoneRemotePage(QWidget):
     def _on_deny_session(self) -> None:
         """User denied or timer expired."""
         self._hide_confirm_dialog()
-        self._status_changed.emit("Session denied", "warn")
+        self.status_changed.emit("Session denied", "warn")
         self._start_btn.setEnabled(True)
 
     def _hide_confirm_dialog(self) -> None:
@@ -345,7 +345,7 @@ class PhoneRemotePage(QWidget):
         self._file_refresh_btn.setEnabled(True)
         self._file_upload_btn.setEnabled(True)
         self._session_status.setText("Session active — Phone screen streaming")
-        self._status_changed.emit("Session active", "ok")
+        self.status_changed.emit("Session active", "ok")
         self._load_file_tree("/")
 
     def _on_stop_session(self) -> None:
@@ -361,7 +361,7 @@ class PhoneRemotePage(QWidget):
         self._screen_label.setPixmap(QPixmap())
         self._screen_label.setText("No active session")
         self._file_tree.clear()
-        self._status_changed.emit("Session stopped", "neutral")
+        self.status_changed.emit("Session stopped", "neutral")
 
     def _on_frame_received(self, frame_bytes: bytes) -> None:
         """Received a JPEG frame from phone."""
@@ -382,7 +382,7 @@ class PhoneRemotePage(QWidget):
     def _on_client_error(self, error: str) -> None:
         """Client reported an error."""
         logger.error("Phone remote client error: %s", error)
-        self._status_changed.emit(f"Error: {error}", "error")
+        self.status_changed.emit(f"Error: {error}", "error")
 
     # --- Screen Input Handlers ---
     def _on_screen_press(self, event) -> None:
@@ -437,7 +437,7 @@ class PhoneRemotePage(QWidget):
                 self._populate_file_tree(entries)
             except Exception as e:
                 logger.error("Failed to load files: %s", e)
-                self._status_changed.emit(f"File error: {e}", "error")
+                self.status_changed.emit(f"File error: {e}", "error")
 
         threading.Thread(target=_worker, daemon=True).start()
 
@@ -485,11 +485,11 @@ class PhoneRemotePage(QWidget):
         def _worker():
             try:
                 result = self._client.upload_file(file_path, self._current_remote_path)
-                self._status_changed.emit(f"Uploaded: {result.get('size', 0)} bytes", "ok")
+                self.status_changed.emit(f"Uploaded: {result.get('size', 0)} bytes", "ok")
                 self._load_file_tree(self._current_remote_path)
             except Exception as e:
                 logger.error("Upload failed: %s", e)
-                self._status_changed.emit(f"Upload failed: {e}", "error")
+                self.status_changed.emit(f"Upload failed: {e}", "error")
 
         threading.Thread(target=_worker, daemon=True).start()
 
@@ -502,10 +502,10 @@ class PhoneRemotePage(QWidget):
         def _worker():
             try:
                 self._client.download_file(remote_path, local_path)
-                self._status_changed.emit(f"Downloaded: {local_path}", "ok")
+                self.status_changed.emit(f"Downloaded: {local_path}", "ok")
             except Exception as e:
                 logger.error("Download failed: %s", e)
-                self._status_changed.emit(f"Download failed: {e}", "error")
+                self.status_changed.emit(f"Download failed: {e}", "error")
 
         threading.Thread(target=_worker, daemon=True).start()
 

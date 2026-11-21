@@ -11,11 +11,13 @@ import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction
+import com.devaraj.maya.MayaApp
 import com.devaraj.maya.R
 import com.devaraj.maya.data.remote.InputEventDto
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
@@ -56,6 +58,22 @@ class MayaAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
+        startPhoneRemoteIfEnabled()
+    }
+
+    /** Phone remote may have been enabled before this service was bound. */
+    private fun startPhoneRemoteIfEnabled() {
+        val app = applicationContext as? MayaApp ?: return
+        handlerScope.launch {
+            val settings = runCatching { app.container.settingsStore.settings.first() }.getOrNull() ?: return@launch
+            if (!settings.phoneRemoteEnabled) return@launch
+            PhoneRemoteForegroundService.start(this@MayaAccessibilityService)
+            PhoneRemoteHttpServer.start(
+                this@MayaAccessibilityService,
+                this@MayaAccessibilityService,
+                ScreenCaptureService.getInstance(),
+            )
+        }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {

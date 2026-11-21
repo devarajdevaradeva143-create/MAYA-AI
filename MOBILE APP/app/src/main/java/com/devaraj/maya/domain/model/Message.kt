@@ -4,7 +4,7 @@ enum class MessageRole { USER, MAYA, ASSISTANT, SYSTEM }
 
 enum class MessageStatus { SENDING, STREAMING, SENT, FAILED, STOPPED }
 
-enum class AiSource { LAPTOP, PHONE, NONE }
+enum class AiSource { LAPTOP, PHONE, CLOUD, NONE }
 
 data class Message(
     val id: String,

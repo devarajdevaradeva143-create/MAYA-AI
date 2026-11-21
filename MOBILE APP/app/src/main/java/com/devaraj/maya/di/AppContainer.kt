@@ -4,7 +4,9 @@ import android.content.Context
 import androidx.room.Room
 import com.devaraj.maya.BuildConfig
 import com.devaraj.maya.data.local.MayaDatabase
+import com.devaraj.maya.data.cloud.GeminiRepository
 import com.devaraj.maya.data.model.OnDeviceModelManager
+import kotlinx.coroutines.flow.first
 import com.devaraj.maya.data.prefs.SettingsStore
 import com.devaraj.maya.data.remote.ApiClient
 import com.devaraj.maya.data.remote.ConnectionRepository
@@ -48,6 +50,17 @@ class AppContainer(context: Context) {
     val chatRepository: ChatRepository by lazy { ChatRepository(database) }
 
     val onDeviceModel: OnDeviceModelManager by lazy { OnDeviceModelManager(appContext) }
+
+    val geminiRepository: GeminiRepository by lazy {
+        GeminiRepository(apiKeyProvider = {
+            // Read from DataStore synchronously — SettingsStore caches in memory
+            settingsStore.settings.let { flow ->
+                kotlinx.coroutines.runBlocking {
+                    flow.first().geminiApiKey
+                }
+            }
+        })
+    }
 
     val voskModel: VoskModelStore by lazy { VoskModelStore(appContext) }
 

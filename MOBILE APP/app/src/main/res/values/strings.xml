@@ -87,6 +87,7 @@
     <string name="chat_persona_teacher">Teacher</string>
     <string name="chat_source_laptop">Laptop</string>
     <string name="chat_source_phone">Phone</string>
+    <string name="chat_source_cloud">Cloud</string>
     <string name="chat_empty">No messages yet.</string>
     <string name="chat_you">You</string>
 
